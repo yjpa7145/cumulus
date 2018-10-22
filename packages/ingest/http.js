@@ -74,9 +74,15 @@ module.exports.httpMixin = (superclass) => class extends superclass {
   async download(remotePath, localPath) {
     const remoteUrl = urljoin(this.host, remotePath);
 
+    const downloadOptions = {};
+
+    if (this.username && this.password) {
+      downloadOptions.auth = `${this.username}:${this.password}`;
+    }
+
     log.info(`Downloading ${remoteUrl} to ${localPath}`);
     try {
-      await http.download(remoteUrl, localPath);
+      await http.download(remoteUrl, localPath, downloadOptions);
     }
     catch (e) {
       if (e.message && e.message.includes('Unexpected HTTP status code: 403')) {
@@ -103,8 +109,17 @@ module.exports.httpMixin = (superclass) => class extends superclass {
     const s3uri = buildS3Uri(bucket, key);
     log.info(`Sync ${remoteUrl} to ${s3uri}`);
 
+    const requestOptions = {};
+
+    if (this.username && this.password) {
+      requestOptions.auth = `${this.username}:${this.password}`;
+    }
+
     const pass = new PassThrough();
-    got.stream(remoteUrl).pipe(pass);
+    got.stream(
+      remoteUrl,
+      requestOptions
+    ).pipe(pass);
 
     await s3().upload({
       Bucket: bucket,
