@@ -618,6 +618,8 @@ class DynamoDbScanQueue {
 exports.DynamoDbScanQueue = DynamoDbScanQueue;
 
 exports.syncUrl = async (uri, bucket, destKey) => {
+  deprecate('@cumulus/common/aws.syncUrl()', '1.10.3');
+
   const response = await concurrency.promiseUrl(uri);
   await exports.promiseS3Upload({ Bucket: bucket, Key: destKey, Body: response });
 };

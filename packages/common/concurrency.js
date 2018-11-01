@@ -6,7 +6,7 @@ const https = require('follow-redirects').https;
 const url = require('url');
 const TaskQueue = require('cwait').TaskQueue;
 const log = require('./log');
-const ResourcesLockedError = require('./errors').ResourcesLockedError;
+const { deprecate } = require('./util');
 
 const limit = (n, fn) => new TaskQueue(Promise, n).wrap(fn);
 
@@ -33,9 +33,26 @@ const mapTolerant = (arr, fn) => {
     });
 };
 
-const toPromise = (fn, ...args) =>
-  new Promise((resolve, reject) =>
+/**
+ * Invoke a function using a node-style callback and return a Promise
+ *
+ * It is recommended that `util.promisify()` be used instead of this function.
+ *
+ * @param {function} fn - the function to invoke
+ * @param  {...any} args - the arguments to pass to the function
+ * @returns {Promise} the result of invoking `fn`
+ * @deprecated Use util.promisify() instead
+ */
+const toPromise = (fn, ...args) => {
+  deprecate(
+    '@cumulus/common/concurrency.toPromise()',
+    '1.10.3',
+    'util.promisify'
+  );
+
+  return new Promise((resolve, reject) =>
     fn(...args, (err, data) => (err ? reject(err) : resolve(data))));
+};
 
 /**
  * Returns a promise that resolves to the result of calling the given function if
@@ -49,8 +66,10 @@ const toPromise = (fn, ...args) =>
 const unless = (condition, fn, ...args) =>
   Promise.resolve((condition(...args) ? null : fn(...args)));
 
-const promiseUrl = (urlstr) =>
-  new Promise((resolve, reject) => {
+const promiseUrl = (urlstr) => {
+  deprecate('@cumulus/common/concurrency.promiseUrl()', '1.10.3', 'got');
+
+  return new Promise((resolve, reject) => {
     const client = urlstr.startsWith('https') ? https : http;
     const urlopts = url.parse(urlstr);
     const options = {
@@ -69,6 +88,7 @@ const promiseUrl = (urlstr) =>
       }
     }).on('error', reject);
   });
+};
 
 class Semaphore {
   constructor(docClient, tableName) {
