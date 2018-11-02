@@ -298,6 +298,9 @@ exports.getS3Object = (bucket, key) =>
 * @returns {Promise} returns the response from `S3.headObject` as a promise
 **/
 exports.fileExists = async (bucket, key) => {
+  if (!bucket) throw new TypeError('bucket is required');
+  if (!key) throw new TypeError('key is required');
+
   const s3 = exports.s3();
 
   try {
