@@ -103,14 +103,18 @@ function put(event, cb) {
  * @param {Function} cb - aws lambda callback function
  * @returns {Promise<Object>} returns delete response
  */
-function del(event, cb) {
+async function del(event, cb) {
   const id = event.pathParameters.id;
   const providerModel = new models.Provider();
 
-  return providerModel.get({ id })
-    .then(() => providerModel.delete({ id }))
-    .then(() => cb(null, { message: 'Record deleted' }))
-    .catch(cb);
+  try {
+    await providerModel.delete(id);
+
+    return cb(null, { message: 'Record deleted' });
+  }
+  catch (err) {
+    return cb(err);
+  }
 }
 
 /**
