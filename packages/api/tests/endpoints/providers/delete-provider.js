@@ -15,7 +15,7 @@ const {
 } = require('../../../lib/testUtils');
 const { Search } = require('../../../es/search');
 const assertions = require('../../../lib/assertions');
-const WorkflowBuilder = require('../../../lib/WorkflowBuilder');
+const Workflow = require('../../../lib/Workflow');
 
 let providerModel;
 let ruleModel;
@@ -24,7 +24,6 @@ let esClient;
 
 let authHeaders;
 let userModel;
-let workflowBuilder;
 
 async function createAndSaveRule(providerId) {
   const rule = fakeRuleFactoryV2({
@@ -34,7 +33,13 @@ async function createAndSaveRule(providerId) {
     }
   });
 
-  const workflow = workflowBuilder.build(rule.workflow);
+  const workflow = new Workflow({
+    bucket: process.env.bucket,
+    name: rule.workflow,
+    s3: s3(),
+    stackName: process.env.stackName
+  });
+
   await workflow.saveMessageTemplate('my-message-template');
 
   await ruleModel.create(rule);
@@ -68,12 +73,6 @@ test.before(async () => {
   };
 
   esClient = await Search.es('fakehost');
-
-  workflowBuilder = new WorkflowBuilder({
-    bucket: process.env.bucket,
-    s3: s3(),
-    stackName: process.env.stackName
-  });
 });
 
 test.beforeEach(async (t) => {
@@ -151,7 +150,7 @@ test('Attempting to delete a provider with an associated rule returns a 400 resp
     t.is(response.statusCode, 400);
 
     const body = JSON.parse(response.body);
-    t.is(body.message, 'Cannot delete a provider that has associated rules.');
+    t.is(body.message, 'Cannot delete a provider that has associated rules');
   });
 });
 
