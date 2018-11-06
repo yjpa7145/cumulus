@@ -131,7 +131,8 @@
     },
     {
       "files": [
-        "packages/deployment/**/*.js"
+        "packages/deployment/**/*.js",
+        "packages/integration-tests/**/*.js"
       ],
       "rules": {
         "no-console": "off"
