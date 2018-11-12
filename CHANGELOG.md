@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
     incoming events via a Kinesis event triggered lambda.
 
 - **CUMULUS-775**
-  - Fixed `@cumulus/cmrjs.searchConcept` and  to search and return CMR results.
+  - Fixed `@cumulus/cmrjs.searchConcept` to search and return CMR results.
   - Modified `@cumulus/cmrjs.CMR.searchGranule` and `@cumulus/cmrjs.CMR.searchCollection` to include CMR's provider as a default parameter to searches.
 
 

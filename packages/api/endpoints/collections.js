@@ -4,7 +4,7 @@ const { handle } = require('../lib/response');
 const models = require('../models');
 const Collection = require('../es/collections');
 const RecordDoesNotExist = require('../lib/errors').RecordDoesNotExist;
-const { injectConceptIds } = require('../lib/injectConceptId');
+
 
 /**
  * List all collections.
@@ -15,10 +15,7 @@ const { injectConceptIds } = require('../lib/injectConceptId');
  */
 function list(event, cb) {
   const collection = new Collection(event);
-  return collection.query()
-    .then((res) => injectConceptIds(res))
-    .then((res) => cb(null, res))
-    .catch(cb);
+  return collection.query().then((res) => cb(null, res)).catch(cb);
 }
 
 /**

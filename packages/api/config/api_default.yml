@@ -12,7 +12,6 @@ ApiCollectionsDefault:
       function: Ref
       value: CollectionsTableDynamoDB
     internal: '{{parent.system_bucket}}'
-    cmr_provider: '{{parent.cmr.provider}}'
     ES_HOST:
       function: Ref
       value: ElasticSearchDomain
