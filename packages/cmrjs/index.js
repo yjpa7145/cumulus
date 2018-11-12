@@ -291,7 +291,8 @@ class CMR {
    * @returns {Promise.<Object>} the CMR response
    */
   async searchCollections(searchParams) {
-    return searchConcept('collections', searchParams, []);
+    const params = Object.assign({}, { provider_short_name: this.provider }, searchParams);
+    return searchConcept('collections', params, []);
   }
 
   /**
@@ -301,7 +302,8 @@ class CMR {
    * @returns {Promise.<Object>} the CMR response
    */
   async searchGranules(searchParams) {
-    return searchConcept('granules', searchParams, []);
+    const params = Object.assign({}, { provider_short_name: this.provider }, searchParams);
+    return searchConcept('granules', params, []);
   }
 }
 
