@@ -143,6 +143,6 @@ jobs:
     #     - DEPLOYMENT=cumulus-from-npm
     #     - USE_NPM_PACKAGES=true
 
-branches:
-  only:
-    - master
+# branches:
+#   only:
+#     - master
