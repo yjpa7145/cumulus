@@ -3,17 +3,6 @@
 const get = require('lodash.get');
 const isObject = require('lodash.isobject');
 
-/**
- * An asynchronous sleep/wait function
- *
- * @param {number} milliseconds - number of milliseconds to sleep
- * @returns {Promise<undefined>} undefined
- */
-async function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-
 function errorify(err) {
   return JSON.stringify(err, Object.getOwnPropertyNames(err));
 }
@@ -88,7 +77,32 @@ function getGranuleProductVolume(granuleFiles) {
   return fileSizes.reduce((a, b) => a + b);
 }
 
-module.exports.sleep = sleep;
+/**
+ * Find a property name in an object in a case-insensitive manner
+ *
+ * @param {Object} obj - the object to be searched
+ * @param {string} keyArg - the name of the key to find
+ * @returns {string|undefined} - the name of the matching key, or undefined if
+ *   none was found
+ */
+function findCaseInsensitiveKey(obj, keyArg) {
+  const keys = Object.keys(obj);
+  return keys.find((key) => key.toLowerCase() === keyArg.toLowerCase());
+}
+exports.findCaseInsensitiveKey = findCaseInsensitiveKey;
+
+/**
+ * Find a property value in an object in a case-insensitive manner
+ *
+ * @param {Object} obj - the object to be searched
+ * @param {string} keyArg - the name of the key to find
+ * @returns {*} the matching value
+ */
+function findCaseInsensitiveValue(obj, keyArg) {
+  return obj[findCaseInsensitiveKey(obj, keyArg)];
+}
+exports.findCaseInsensitiveValue = findCaseInsensitiveValue;
+
 module.exports.errorify = errorify;
 module.exports.parseException = parseException;
 module.exports.deconstructCollectionId = deconstructCollectionId;

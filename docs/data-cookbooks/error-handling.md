@@ -1,3 +1,9 @@
+---
+id: error-handling
+title: Error Handling in Workflows
+hide_title: true
+---
+
 # Error Handling in Workflows
 
 Cumulus Workflow error handling is configurable via Cumulus Workflow Definitions. These workflow definitions are AWS Step Function definitions, and AWS Step Functions enable users to configure what the state machine does next when an exception is thrown. Read more in the AWS docs: [How Step Functions Works: Error Handling](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html).
@@ -21,7 +27,7 @@ Some best practices for error handling in Cumulus Workflows are:
 Note: In the example below, YAML syntax (i.e. `&ErrorEqualDefaults` and `<<: *ErrorEqualDefaults`) is used to create references to reusable blocks which makes the definition less repetitive. Read more here: [YAML - Anchors, References, Extend](https://blog.daemonl.com/2016/02/yaml.html).
 
 ```yaml
-KinesisTriggerTest:
+CNMExampleWorkflow:
   Comment: 'Tests Workflow from Kinesis Stream'
   StartAt: StartStatus
   States:
@@ -80,7 +86,7 @@ KinesisTriggerTest:
 
 The above results in a workflow which is visualized in the diagram below:
 
-![Kinesis Workflow](./kinesis-workflow.png)
+![Kinesis Workflow](assets/kinesis-workflow.png)
 
 ## Summary
 

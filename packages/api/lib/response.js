@@ -11,31 +11,30 @@
 
 const isFunction = require('lodash.isfunction');
 const isString = require('lodash.isstring');
-const deprecate = require('depd')('@cumulus/api/lib/response');
-const { log } = require('@cumulus/common');
+const log = require('@cumulus/common/log');
+const { deprecate } = require('@cumulus/common/util');
+const {
+  JsonWebTokenError,
+  TokenExpiredError
+} = require('jsonwebtoken');
+
 const { User } = require('../models');
-const { errorify } = require('./utils');
+const { verifyJwtToken } = require('./token');
+const { errorify, findCaseInsensitiveKey } = require('./utils');
 const {
   AuthorizationFailureResponse,
   InternalServerError,
-  LambdaProxyResponse
+  LambdaProxyResponse,
+  InvalidTokenResponse,
+  TokenExpiredResponse
 } = require('./responses');
 
-/**
- * Find a property name in an object in a case-insensitive manner
- *
- * @param {Object} obj - the object to be searched
- * @param {string} keyArg - the name of the key to find
- * @returns {string|undefined} - the name of the matching key, or undefined if
- *   none was found
- */
-function findCaseInsensitiveKey(obj, keyArg) {
-  const keys = Object.keys(obj);
-  return keys.find((key) => key.toLowerCase() === keyArg.toLowerCase());
-}
-
 function resp(context, err, bodyArg, statusArg = null, headers = {}) {
-  deprecate('resp(), use getAuthorizationFailureResponse() and buildLambdaProxyResponse() instead,');
+  deprecate(
+    '@cumulus/api/response.resp()',
+    '1.10.3',
+    '@cumulus/api/responses'
+  );
 
   if (!isFunction(context.succeed)) {
     throw new TypeError('context as object with succeed method not provided');
@@ -62,12 +61,20 @@ function resp(context, err, bodyArg, statusArg = null, headers = {}) {
 }
 
 function buildLambdaProxyResponse(params = {}) {
-  deprecate('buildLambdaProxyResponse(), use `new LambdaProxyResponse()` instead,');
+  deprecate(
+    '@cumulus/api/response.buildLambdaProxyResponse()',
+    '1.10.3',
+    '@cumulus/api/responses'
+  );
   return new LambdaProxyResponse(params);
 }
 
 function buildAuthorizationFailureResponse(params) {
-  deprecate('buildAuthorizationFailureResponse(), use `new AuthorizationFailureResponse()` instead,');
+  deprecate(
+    '@cumulus/api/response.buildAuthorizationFailureResponse()',
+    '1.10.3',
+    '@cumulus/api/responses'
+  );
   return new AuthorizationFailureResponse(params);
 }
 
@@ -98,7 +105,7 @@ async function getAuthorizationFailureResponse(params) {
   }
 
   // Parse the Authorization header
-  const [scheme, token] = request.headers[authorizationKey].trim().split(/\s+/);
+  const [scheme, jwtToken] = request.headers[authorizationKey].trim().split(/\s+/);
 
   // Verify that the Authorization type was "Bearer"
   if (scheme !== 'Bearer') {
@@ -109,39 +116,38 @@ async function getAuthorizationFailureResponse(params) {
   }
 
   // Verify that a token was set in the Authorization header
-  if (!token) {
+  if (!jwtToken) {
     return new AuthorizationFailureResponse({
       error: 'invalid_request',
       message: 'Missing token'
     });
   }
 
-  const userModelClient = new User(usersTable);
-  const findUserResult = await userModelClient.scan({
-    filter: 'password = :token',
-    values: { ':token': token }
-  });
-
-  // Verify that the token exists in the DynamoDB Users table
-  if (findUserResult.Count !== 1) {
-    return new AuthorizationFailureResponse({
-      message: 'User not authorized',
-      statusCode: 403
-    });
+  let username;
+  try {
+    ({ username } = verifyJwtToken(jwtToken));
+  }
+  catch (error) {
+    log.error('Error caught when checking JWT token', error);
+    if (error instanceof TokenExpiredError) {
+      return new TokenExpiredResponse();
+    }
+    if (error instanceof JsonWebTokenError) {
+      return new InvalidTokenResponse();
+    }
   }
 
-  // Not sure how this could ever happen
-  if (findUserResult.Items[0].expires === undefined) {
-    log.error('Token does not have an expires field:', token);
-    return new InternalServerError();
+  const userModel = new User({ tableName: usersTable });
+  try {
+    await userModel.get({ userName: username });
   }
-
-  // Verify that the token has not expired
-  if (findUserResult.Items[0].expires < Date.now()) {
-    return new AuthorizationFailureResponse({
-      message: 'Access token has expired',
-      statusCode: 403
-    });
+  catch (err) {
+    if (err.name === 'RecordDoesNotExist') {
+      return new AuthorizationFailureResponse({
+        message: 'User not authorized',
+        statusCode: 403
+      });
+    }
   }
 
   return null;

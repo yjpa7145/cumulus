@@ -18,10 +18,8 @@ async function callRuleApiFunction(prefix, requestPayload) {
     payload: requestPayload
   });
 
-  console.log(`payload: ${payload}`);
-
   try {
-    return JSON.parse(payload.body);
+    return payload;
   }
   catch (error) {
     console.log(`Error parsing JSON response for rule ${payload.httpMethod}: ${payload}`);
@@ -49,6 +47,29 @@ async function postRule({ prefix, rule }) {
 }
 
 /**
+ * Update a rule in the rules API
+ *
+ * @param {Object} params - params
+ * @param {string} params.prefix - the prefix configured for the stack
+ * @param {Object} params.rule - the rule to update
+ * @param {Object} params.updateParams - key/value to update on the rule
+ * @returns {Promise<Object>} - promise that resolves to the output of the API lambda
+ */
+async function updateRule({ prefix, ruleName, updateParams }) {
+  const payload = {
+    httpMethod: 'PUT',
+    resource: '/rules/{name}',
+    path: `rules/${ruleName}`,
+    pathParameters: {
+      name: ruleName
+    },
+    body: JSON.stringify(updateParams)
+  };
+
+  return callRuleApiFunction(prefix, payload);
+}
+
+/**
  * Get a list of rules from the API
  *
  * @param {Object} params - params
@@ -66,10 +87,30 @@ async function listRules({ prefix }) {
 }
 
 /**
+ * Get a rule definition from the API
+ *
+ * @param {Object} params - params
+ * @param {string} params.prefix - the prefix configured for the stack
+ * @param {string} params.ruleName - name of the rule
+ * @returns {Promise<Object>} - promise that resolves to the output of the API lambda
+ */
+async function getRule({ prefix, ruleName }) {
+  const payload = {
+    httpMethod: 'GET',
+    resource: '/rules/{name}',
+    path: `rules/${ruleName}`,
+    pathParameters: { name: ruleName }
+  };
+
+  return callRuleApiFunction(prefix, payload);
+}
+
+/**
  * Delete a rule via the API
  *
  * @param {Object} params - params
  * @param {string} params.prefix - the prefix configured for the stack
+ * @param {string} params.ruleName - name of the rule
  * @returns {Promise<Object>} - promise that resolves to the output of the API lambda
  */
 async function deleteRule({ prefix, ruleName }) {
@@ -83,8 +124,33 @@ async function deleteRule({ prefix, ruleName }) {
   return callRuleApiFunction(prefix, payload);
 }
 
+/**
+ * Rerun a rule via the API
+ *
+ * @param {Object} params - params
+ * @param {string} params.prefix - the prefix configured for the stack
+ * @param {string} params.ruleName - the name of the rule to rerun
+ * @returns {Promise<Object>} - promise that resolves to the output of the API lambda
+ */
+async function rerunRule({ prefix, ruleName }) {
+  const payload = {
+    httpMethod: 'PUT',
+    resource: '/rules/{name}',
+    path: `rules/${ruleName}`,
+    pathParameters: {
+      name: ruleName
+    },
+    body: JSON.stringify({ action: 'rerun' })
+  };
+
+  return callRuleApiFunction(prefix, payload);
+}
+
 module.exports = {
   postRule,
+  updateRule,
   deleteRule,
-  listRules
+  getRule,
+  listRules,
+  rerunRule
 };

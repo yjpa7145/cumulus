@@ -6,7 +6,139 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v1.11.0] - 2018-11-30
+
+**Please Note**
+- Redeploy IAM roles:
+  - CUMULUS-817 includes a migration that requires reconfiguration/redeployment of IAM roles.  Please see the [upgrade instructions](https://nasa.github.io/cumulus/docs/upgrade/1.11.0) for more information.
+  - CUMULUS-977 includes a few new SNS-related permissions added to the IAM roles that will require redeployment of IAM roles.
+- `cumulus-message-adapter` v1.0.13+ is required for `@cumulus/api` granule reingest API to work properly.  The latest version should be downloaded automatically by kes.
+- A `TOKEN_SECRET` value (preferably 256-bit for security) must be added to `.env` to securely sign JWTs used for authorization in `@cumulus/api`
+
+### Changed
+
+- **CUUMULUS-1000** - Distribution endpoint now persists logins, instead of
+  redirecting to Earthdata Login on every request
+- **CUMULUS-783 CUMULUS-790** - Updated `@cumulus/sync-granule` and `@cumulus/move-granules` tasks to always overwrite existing files for manually-triggered reingest.
+- **CUMULUS-906** - Updated `@cumulus/api` granule reingest API to
+  - add `reingestGranule: true` and `forceDuplicateOverwrite: true` to Cumulus message `cumulus_meta.cumulus_context` field to indicate that the workflow is a manually triggered re-ingest.
+  - return warning message to operator when duplicateHandling is not `replace`
+  - `cumulus-message-adapter` v1.0.13+ is required.
+- **CUMULUS-793** - Updated the granule move PUT request in `@cumulus/api` to reject the move with a 409 status code if one or more of the files already exist at the destination location
+- Updated `@cumulus/helloworld` to use S3 to store state for pass on retry tests
+- Updated `@cumulus/ingest`:
+  - [Required for MAAP] `http.js#list` will now find links with a trailing whitespace
+  - Removed code from `granule.js` which looked for files in S3 using `{ Bucket: discoveredFile.bucket, Key: discoveredFile.name }`. This is obsolete since `@cumulus/ingest` uses a `file-staging` and `constructCollectionId()` directory prefixes by default.
+- **CUMULUS-989**
+  - Updated `@cumulus/api` to use [JWT (JSON Web Token)](https://jwt.io/introduction/) as the transport format for API authorization tokens and to use JWT verification in the request authorization
+  - Updated `/token` endpoint in `@cumulus/api` to return tokens as JWTs
+  - Added a `/refresh` endpoint in `@cumulus/api` to request new access tokens from the OAuth provider using the refresh token
+  - Added `refreshAccessToken` to `@cumulus/api/lib/EarthdataLogin` to manage refresh token requests with the Earthdata OAuth provider
+
 ### Added
+- **CUMULUS-1050**
+  - Separated configuration flags for originalPayload/finalPayload cleanup such that they can be set to different retention times
+- **CUMULUS-798**
+  - Added daily Executions cleanup CloudWatch event that triggers cleanExecutions lambda
+  - Added cleanExecutions lambda that removes finalPayload/originalPayload field entries for records older than configured timeout value (execution_payload_retention_period), with a default of 30 days
+- **CUMULUS-815/816**
+  - Added 'originalPayload' and 'finalPayload' fields to Executions table
+  - Updated Execution model to populate originalPayload with the execution payload on record creation
+  - Updated Execution model code to populate finalPayload field with the execution payload on execution completion
+  - Execution API now exposes the above fields
+- **CUMULUS-977**
+  - Rename `kinesisConsumer` to `messageConsumer` as it handles both Kinesis streams and SNS topics as of this version.
+  - Add `sns`-type rule support. These rules create a subscription between an SNS topic and the `messageConsumer`.
+    When a message is received, `messageConsumer` is triggered and passes the SNS message (JSON format expected) in
+    its entirety to the workflow in the `payload` field of the Cumulus message. For more information on sns-type rules,
+    see the [documentation](https://nasa.github.io/cumulus/docs/data-cookbooks/setup#rules).
+- **CUMULUS-975**
+  - Add `KinesisInboundEventLogger` and `KinesisOutboundEventLogger` API lambdas.  These lambdas
+    are utilized to dump incoming and outgoing ingest workflow kinesis streams
+    to cloudwatch for analytics in case of AWS/stream failure.
+  - Update rules model to allow tracking of log_event ARNs related to
+    Rule event logging.    Kinesis rule types will now automatically log
+    incoming events via a Kinesis event triggered lambda.
+ CUMULUS-975-migration-4
+  - Update migration code to require explicit migration names per run
+  - Added migration_4 to migrate/update exisitng Kinesis rules to have a log event mapping
+  - Added new IAM policy for migration lambda
+- **CUMULUS-775**
+  - Adds a instance metadata endpoint to the `@cumulus/api` package.
+  - Adds a new convenience function `hostId` to the `@cumulus/cmrjs` to help build environment specific cmr urls.
+  - Fixed `@cumulus/cmrjs.searchConcept` to search and return CMR results.
+  - Modified `@cumulus/cmrjs.CMR.searchGranule` and `@cumulus/cmrjs.CMR.searchCollection` to include CMR's provider as a default parameter to searches.
+- **CUMULUS-965**
+  - Add `@cumulus/test-data.loadJSONTestData()`,
+    `@cumulus/test-data.loadTestData()`, and
+    `@cumulus/test-data.streamTestData()` to safely load test data. These
+    functions should be used instead of using `require()` to load test data,
+    which could lead to tests interferring with each other.
+  - Add a `@cumulus/common/util/deprecate()` function to mark a piece of code as
+    deprecated
+- **CUMULUS-986**
+  - Added `waitForTestExecutionStart` to `@cumulus/integration-tests`
+- **CUMULUS-919**
+  - In `@cumulus/deployment`, added support for NGAP permissions boundaries for IAM roles with `useNgapPermissionBoundary` flag in `iam/config.yml`. Defaults to false.
+
+### Fixed
+- Fixed a bug where FTP sockets were not closed after an error, keeping the Lambda function active until it timed out [CUMULUS-972]
+- **CUMULUS-656**
+  - The API will no longer allow the deletion of a provider if that provider is
+    referenced by a rule
+  - The API will no longer allow the deletion of a collection if that collection
+    is referenced by a rule
+- Fixed a bug where `@cumulus/sf-sns-report` was not pulling large messages from S3 correctly.
+
+### Deprecated
+- `@cumulus/ingest/aws/StepFunction.pullEvent()`. Use `@cumulus/common/aws.pullStepFunctionEvent()`.
+- `@cumulus/ingest/consumer.Consume` due to unpredictable implementation. Use `@cumulus/ingest/consumer.Consumer`.
+Call `Consumer.consume()` instead of `Consume.read()`.
+
+## [v1.10.4] - 2018-11-28
+
+### Added
+- **CUMULUS-1008**
+  - New `config.yml` parameter for SQS consumers: `sqs_consumer_rate: (default 500)`, which is the maximum number of
+  messages the consumer will attempt to process per execution. Currently this is only used by the sf-starter consumer,
+  which runs every minute by default, making this a messages-per-minute upper bound. SQS does not guarantee the number
+  of messages returned per call, so this is not a fixed rate of consumption, only attempted number of messages received.
+
+### Deprecated
+- `@cumulus/ingest/consumer.Consume` due to unpredictable implementation. Use `@cumulus/ingest/consumer.Consumer`.
+
+### Changed
+- Backported update of `packages/api` dependency `@mapbox/dyno` to `1.4.2` to mitigate `event-stream` vulnerability.
+
+## [v1.10.3] - 2018-10-31
+
+### Added
+- **CUMULUS-817**
+  - Added AWS Dead Letter Queues for lambdas that are scheduled asynchronously/such that failures show up only in cloudwatch logs.
+- **CUMULUS-956**
+  - Migrated developer documentation and data-cookbooks to Docusaurus
+    - supports versioning of documentation
+  - Added `docs/docs-how-to.md` to outline how to do things like add new docs or locally install for testing.
+  - Deployment/CI scripts have been updated to work with the new format
+- **CUMULUS-811**
+  - Added new S3 functions to `@cumulus/common/aws`:
+    - `aws.s3TagSetToQueryString`: converts S3 TagSet array to querystring (for use with upload()).
+    - `aws.s3PutObject`: Returns promise of S3 `putObject`, which puts an object on S3
+    - `aws.s3CopyObject`: Returns promise of S3 `copyObject`, which copies an object in S3 to a new S3 location
+    - `aws.s3GetObjectTagging`: Returns promise of S3 `getObjectTagging`, which returns an object containing an S3 TagSet.
+  - `@/cumulus/common/aws.s3PutObject` defaults to an explicit `ACL` of 'private' if not overridden.
+  - `@/cumulus/common/aws.s3CopyObject` defaults to an explicit `TaggingDirective` of 'COPY' if not overridden.
+
+### Deprecated
+- **CUMULUS-811**
+  - Deprecated `@cumulus/ingest/aws.S3`. Member functions of this class will now
+    log warnings pointing to similar functionality in `@cumulus/common/aws`.
+
+## [v1.10.2] - 2018-10-24
+
+### Added
+- **CUMULUS-965**
+  - Added a `@cumulus/logger` package
 - **CUMULUS-885**
   - Added 'human readable' version identifiers to Lambda Versioning lambda aliases
 - **CUMULUS-705**
@@ -21,7 +153,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - Adds an AsyncOperation ECS task to the `@cumulus/api` package, which will
     fetch an Lambda function, run it in ECS, and then store the result to the
     AsyncOperations table in DynamoDB.
-- **CUMULUS-851** Added workflow lambda versioning feature to allow in-flight workflows to use lambda versions that were in place when a workflow was initiated
+- **CUMULUS-851** - Added workflow lambda versioning feature to allow in-flight workflows to use lambda versions that were in place when a workflow was initiated
     - Updated Kes custom code to remove logic that used the CMA file key to determine template compilation logic.  Instead, utilize a `customCompilation` template configuration flag to indicate a template should use Cumulus's kes customized methods instead of 'core'.
 	- Added `useWorkflowLambdaVersions` configuration option to enable the lambdaVersioning feature set.   **This option is set to true by default** and should be set to false to disable the feature.
 	- Added uniqueIdentifier configuration key to S3 sourced lambdas to optionally support S3 lambda resource versioning within this scheme. This key must be unique for each modified version of the lambda package and must be updated in configuration each time the source changes.
@@ -43,6 +175,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - `cleanUpProviders` combines the above in one function.
   - `@cumulus/integrations-tests/api.js`: `deleteGranule` and `deletePdr` functions to make `DELETE` requests to Cumulus API
   - `rules` API functionality for posting and deleting a rule and listing all rules
+  - `wait-for-deploy` lambda for use in the redeployment tests
 - `@cumulus/ingest/granule.js`: `ingestFile` inserts new `duplicate_found: true` field in the file's record if a duplicate file already exists on S3.
 - `@cumulus/api`: `/execution-status` endpoint requests and returns complete execution output if  execution output is stored in S3 due to size.
 - Added option to use environment variable to set CMR host in `@cumulus/cmrjs`.
@@ -57,6 +190,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **CUMULUS-940** - modified `@cumulus/common/aws` `receiveSQSMessages` to take a parameter object instead of positional parameters.  All defaults remain the same, but now access to long polling is available through `options.waitTimeSeconds`.
+- **CUMULUS-948** - Update lambda functions `CNMToCMA` and `CnmResponse` in the `cumulus-data-shared` bucket and point the default stack to them.
 - **CUMULUS-782** - Updated `@cumulus/sync-granule` task and `Granule.ingestFile` in `@cumulus/ingest` to keep both old and new data when a destination file with different checksum already exists and `duplicateHandling` is `version`
 - Updated the config schema in `@cumulus/move-granules` to include the `moveStagedFiles` param.
 - **CUMULUS-778** - Updated config schema and documentation in `@cumulus/sync-granule` to include `duplicateHandling` parameter for specifying how duplicate filenames should be handled
@@ -71,6 +206,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - `getGranuleId` in `@cumulus/ingest` bug: `getGranuleId` was constructing an error using `filename` which was undefined. The fix replaces `filename` with the `uri` argument.
 - Fixes to `del` in `@cumulus/api/endpoints/granules.js` to not error/fail when not all files exist in S3 (e.g. delete granule which has only 2 of 3 files ingested).
+- `@cumulus/deployment/lib/crypto.js` now checks for private key existence properly.
 
 ## [v1.10.1] - 2018-09-4
 
@@ -146,7 +282,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [v1.9.0] - 2018-08-06
 
-**Please note** additional information and upgrade instructions [here](https://nasa.github.io/cumulus/upgrade/1.9.0.html)
+**Please note** additional information and upgrade instructions [here](https://nasa.github.io/cumulus/docs/upgrade/1.9.0)
 
 ### Added
 - **CUMULUS-712** - Added integration tests verifying expected behavior in workflows
@@ -213,7 +349,7 @@ We may need to update the api documentation to reflect this.
 
 ## [v1.7.0] - 2018-07-02
 
-### Please note: [Upgrade Instructions](https://nasa.github.io/cumulus/upgrade/1.7.0.html)
+### Please note: [Upgrade Instructions](https://nasa.github.io/cumulus/docs/upgrade/1.7.0)
 
 ### Added
 - **GITC-776-2** - Add support for versioned collectons
@@ -247,7 +383,7 @@ We may need to update the api documentation to reflect this.
 
 ## [v1.6.0] - 2018-06-06
 
-### Please note: [Upgrade Instructions](https://nasa.github.io/cumulus/upgrade/1.6.0.html)
+### Please note: [Upgrade Instructions](https://nasa.github.io/cumulus/docs/upgrade/1.6.0)
 
 ### Fixed
 - **CUMULUS-602** - Format all logs sent to Elastic Search.
@@ -552,7 +688,11 @@ We may need to update the api documentation to reflect this.
 
 ## [v1.0.0] - 2018-02-23
 
-[Unreleased]: https://github.com/nasa/cumulus/compare/v1.10.1...HEAD
+[Unreleased]: https://github.com/nasa/cumulus/compare/v1.11.0...HEAD
+[v1.11.0]: https://github.com/nasa/cumulus/compare/v1.10.4...v1.11.0
+[v1.10.4]: https://github.com/nasa/cumulus/compare/v1.10.3...v1.10.4
+[v1.10.3]: https://github.com/nasa/cumulus/compare/v1.10.2...v1.10.3
+[v1.10.2]: https://github.com/nasa/cumulus/compare/v1.10.1...v1.10.2
 [v1.10.1]: https://github.com/nasa/cumulus/compare/v1.10.0...v1.10.1
 [v1.10.0]: https://github.com/nasa/cumulus/compare/v1.9.1...v1.10.0
 [v1.9.1]: https://github.com/nasa/cumulus/compare/v1.9.0...v1.9.1

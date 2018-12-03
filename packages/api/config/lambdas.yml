@@ -4,6 +4,7 @@ sqs2sf:
   memory: 512
   source: 'node_modules/@cumulus/api/dist/'
 
+
 executeMigrations:
   handler: index.executeMigrations
   timeout: 300
@@ -23,7 +24,14 @@ executeMigrations:
     PdrsTable:
       function: Ref
       value: PdrsTableDynamoDB
+    RulesTable:
+      function: Ref
+      value: RulesTableDynamoDB
+    KinesisInboundEventLogger:
+      function: Ref
+      value: KinesisInboundEventLoggerLambdaFunction
     internal: '{{system_bucket}}'
+
 
 sns2elasticsearch:
   handler: index.indexer
@@ -41,6 +49,7 @@ sns2elasticsearch:
     PdrsTable:
       function: Ref
       value: PdrsTableDynamoDB
+  namedLambdaDeadLetterQueue: true
 
 log2elasticsearch:
   handler: index.logHandler
@@ -48,6 +57,7 @@ log2elasticsearch:
   memory: 512
   useElasticSearch: '{{es.name}}'
   source: 'node_modules/@cumulus/api/dist/'
+  namedLambdaDeadLetterQueue: true
 
 dbIndexer:
   handler: index.dbIndexer
@@ -60,9 +70,10 @@ dbIndexer:
     FilesTable:
       function: Ref
       value: FilesTableDynamoDB
+  namedLambdaDeadLetterQueue: true
 
-kinesisConsumer:
-  handler: index.kinesisConsumer
+messageConsumer:
+  handler: index.messageConsumer
   timeout: 100
   memory: 512
   source: 'node_modules/@cumulus/api/dist/'
@@ -82,7 +93,7 @@ kinesisConsumer:
       value: '${kinesisFallbackSns}'
 
 fallbackConsumer:
-  handler: index.kinesisConsumer
+  handler: index.messageConsumer
   timeout: 100
   memory: 512
   source: 'node_modules/@cumulus/api/dist/'
@@ -112,6 +123,7 @@ ScheduleSF:
     ProvidersTable:
       function: Ref
       value: ProvidersTableDynamoDB
+  namedLambdaDeadLetterQueue: true
 
 jobs:
   handler: index.jobs
@@ -119,6 +131,22 @@ jobs:
   memory: 512
   useElasticSearch: '{{es.name}}'
   source: 'node_modules/@cumulus/api/dist/'
+  namedLambdaDeadLetterQueue: true
+
+cleanExecutions:
+  handler: index.cleanExecutions
+  timeout: 900
+  memory: 1024
+  source: 'node_modules/@cumulus/api/dist/'
+  namedLambdaDeadLetterQueue: true
+  envs:
+    nonCompleteExecutionPayloadTimeout: '{{non_complete_execution_payload_timeout}}'
+    completeExecutionPayloadTimeout: '{{complete_execution_payload_timeout}}'
+    nonCompleteExecutionPayloadTimeoutDisable: '{{non_complete_execution_payload_disable}}'
+    completeExecutionPayloadTimeoutDisable: '{{complete_execution_payload_disable}}'
+    ExecutionsTable:
+      function: Ref
+      value: ExecutionsTableDynamoDB
 
 # used as custom resource for cloudformation manipulation
 CustomBootstrap:
@@ -128,7 +156,6 @@ CustomBootstrap:
   source: 'node_modules/@cumulus/api/dist/'
   envs:
     internal: '{{system_bucket}}'
-    stackName: '{{stackName}}'
 
 InRegionS3Policy:
   handler: index.inRegionS3Policy
@@ -145,6 +172,8 @@ EmsReport:
   envs:
     bucket: '{{system_bucket}}'
     ems_provider: '{{ems.provider}}'
+  namedLambdaDeadLetterQueue: true
+
 
 EmsDistributionReport:
   handler: index.emsDistributionReport
@@ -161,7 +190,6 @@ CreateReconciliationReport:
   source: 'node_modules/@cumulus/api/dist/'
   envs:
     systemBucket: '{{system_bucket}}'
-    stackName: '{{stackName}}'
     filesTableName:
       function: Ref
       value: FilesTableDynamoDB
@@ -169,3 +197,15 @@ CreateReconciliationReport:
 BulkDelete:
   handler: index.bulkDeleteLambda
   source: 'node_modules/@cumulus/api/dist/'
+
+KinesisInboundEventLogger:
+  handler: index.logger
+  timeout: 300
+  memory: 512
+  source: 'node_modules/@cumulus/api/dist/'
+
+KinesisOutboundEventLogger:
+  handler: index.logger
+  timeout: 300
+  memory: 512
+  source: 'node_modules/@cumulus/api/dist'

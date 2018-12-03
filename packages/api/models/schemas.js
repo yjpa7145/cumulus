@@ -1,5 +1,36 @@
 'use strict';
 
+module.exports.accessToken = {
+  title: 'Access Token Object',
+  description: 'Cumulus API AccessToken Table schema',
+  type: 'object',
+  required: ['accessToken', 'refreshToken'],
+  additionalProperties: false,
+  properties: {
+    accessToken: {
+      title: 'Access Token',
+      description: 'The access token returned by the OAuth provider',
+      type: 'string'
+    },
+    createdAt: { type: 'integer' },
+    expirationTime: {
+      description: 'The expiration time of the access token in milliseconds',
+      type: 'integer'
+    },
+    refreshToken: {
+      title: 'Refresh Token',
+      description: 'The refresh token returned by the OAuth provider',
+      type: 'string'
+    },
+    updatedAt: { type: 'integer' },
+    username: {
+      title: 'Username',
+      description: 'The username associated with the access token. For valid request authorization, the username must match a record in the Users table',
+      type: 'string'
+    }
+  }
+};
+
 // Async Operation record definition
 module.exports.asyncOperation = {
   title: 'AsyncOperation Object',
@@ -304,10 +335,18 @@ module.exports.rule = {
           type: 'string',
           enum: ['onetime', 'scheduled', 'sns', 'kinesis']
         },
+        // Value is multi-use.   For a kinesis rule this is the target stream arn, for
+        // a scheduled event it's the schedule pattern (e.g. cron), for a one-time rule.
         value: {
           type: 'string'
         },
+        // Kinesis scheduled event arn
         arn: {
+          type: 'string',
+          readonly: true
+        },
+        // Kinesis scheduled log event arn
+        logEventArn: {
           type: 'string',
           readonly: true
         }
@@ -522,6 +561,14 @@ module.exports.execution = {
     timestamp: {
       type: 'number',
       readonly: true
+    },
+    originalPayload: {
+      title: 'The original payload for this workflow',
+      type: 'object'
+    },
+    finalPayload: {
+      title: 'The final payload of this workflow',
+      type: 'object'
     }
   },
   required: [

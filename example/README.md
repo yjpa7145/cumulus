@@ -11,7 +11,7 @@ yarn
 
 ## Running tests locally
 
-These tests run against AWS, so a Cumulus deployment is needed. Set up the deployment using the configurations in this repository. Deployment instructions are located [here](https://nasa.github.io/cumulus/deployment/). The dashboard is not needed for these tests.
+These tests run against AWS, so a Cumulus deployment is needed. Set up the deployment using the configurations in this repository. Deployment instructions are located [here](https://nasa.github.io/cumulus/docs/deployment/deployment-readme). The dashboard is not needed for these tests.
 
 ### How to configure your test stack
 
@@ -49,15 +49,46 @@ This command will update the lambda with the latest lambda code.
 
 Test data comes from the @cumulus/test-data package and is uploaded to S3 during the setup step when running all tests. The data will be uploaded to the S3 bucket specified in the test configuration.
 
+### Fake data server
+
+A fake server is required for tests testing FTP/HTTP/HTTPS discover and downloads. The fake server should be set up once per account.
+
+The Cloudformation template for the fake data server is in `fake-server.yml`. To setup the fake server run:
+
+```
+aws cloudformation deploy --template-file fake-server.yml --stack-name <stack-name> --parameter-overrides VpcId=<vpc-XXXXX> SubnetId=<subnet-XXXXXX> AZone=<az-zone> Ngap=true --capabilities CAPABILITY_NAMED_IAM
+```
+
+with the following parameters
+* stack-name - stack name for the fake server
+* VpcId - vpc id
+* SubnetId - subent id
+* AZone - availability zone, needs to match the subnet id's availability zone
+* Ngap - true if in an NASA NGAP environment, will add the NGAP permission boundary to the IAM role created
+
+In the outputs section of your Cloudformation deployment in the AWS console, you can find the address of the fake server created. In the provider configurations in `example/data/providers`, update the providers to use the correct host address.
+
+By default, the data location is the `cumulus-data-shared` S3 bucket. To use a different bucket for test data, update `fake-server.yml` with the alternative bucket.
+
 ### Run all tests
 
 Tests are written and run with [jasmine](https://jasmine.github.io/setup/nodejs.html).
 
-To run all of the tests, run `DEPLOYMENT=<name-of-your-deployment> npm test` in this directory.
+Tests are separated into standalone and parallel folders. The `standalone` folder is for tests that cannot be run in parallel with any other tests and should be run in a separate job, for example, the redeployment tests that are only run by Travis on master.
+
+The `parallel` folder holds tests that can be run in parallel.
+
+All other tests in the spec folder will be run in serial.
+
+To run all tests outside of standalone, run `DEPLOYMENT=<name-of-your-deployment> npm test` in this directory. The parallel tests will be run in parallel locally and on CI.
+
+To run all of the tests, including standalone, run `DEPLOYMENT=<name-of-your-deployment> npm run all-tests` in this directory.
 
 ### Run tests for an individual test file
 
-To run an individual test file, include a path to the spec file, i.e. `DEPLOYMENT=<name-of-your-deployment> npm test spec/helloWorld/HelloWorldSuccessSpec.js`.
+To run an individual test file, include a path to the spec file, i.e. `DEPLOYMENT=<name-of-your-deployment> node_modules/.bin/jasmine spec/helloWorld/HelloWorldSuccessSpec.js`.
+
+Jasmine supports wildcard expressions for running tests, so an entire test folder can be run using `DEPLOYMENT=<name-of-your-deployment> node_modules/.bin/jasmine spec/standalone/*`
 
 ## Adding tests
 
@@ -73,6 +104,8 @@ The workflows yaml files are located in the `/workflows/` folder and are split u
 
 A new folder should be added in the `/spec` folder for the workflow and the tests should go into that folder with the input JSON files.
 
+Ideally the test can run in parallel with other tests and should be put in the `parallel` folder. If it cannot be, it should go in the `spec` folder. Only if the test should be run outside of the test suite should it go in the `standalone` folder.
+
 ## Using your AWS CF stack in Travis CI
 
 To use your own CF stack for running integration tests in Travis CI builds, add
@@ -82,6 +115,7 @@ your stack name [here](../travis-ci/select-stack.js).
 
 ### Redeployment During Tests
 
-There are tests for redeploying the Cumulus stack while a workflow is running (see `spec/redeployment`). This is acheived by backing up with the `workflows.yml` file, updating it, and redeploying the stack. When redeploy tests are complete, the original `workflows.yml` is restored, the backup file is deleted, and the stack is redeployed, restoring it to its original state.
+There are tests for redeploying the Cumulus stack while a workflow is running (see `spec/standalone/redeployment`). This is acheived by backing up with the `workflows.yml` file, updating it, and redeploying the stack. When redeploy tests are complete, the original `workflows.yml` is restored, the backup file is deleted, and the stack is redeployed, restoring it to its original state.
 
 Please note that the stack will be redeployed multiple times when running tests and any errors during redeployment can result in errors in later tests. The deployment output is printed to the console.
+

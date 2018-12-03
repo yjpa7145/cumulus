@@ -3,6 +3,8 @@
 const { CollectionConfigStore } = require('@cumulus/common');
 const Manager = require('./base');
 const collectionSchema = require('./schemas').collection;
+const Rule = require('./rules');
+const { AssociatedRulesError } = require('../lib/errors');
 
 function checkRegex(regex, sampleFileName) {
   const validation = new RegExp(regex);
@@ -38,6 +40,17 @@ class Collection extends Manager {
     });
   }
 
+  /**
+   * Check if a given collection exists
+   *
+   * @param {string} name - collection name
+   * @param {string} version - collection version
+   * @returns {boolean}
+   */
+  async exists(name, version) {
+    return super.exists({ name, version });
+  }
+
   async create(item) {
     const collectionConfigStore = new CollectionConfigStore(
       process.env.internal,
@@ -52,6 +65,57 @@ class Collection extends Manager {
     await collectionConfigStore.put(dataType, item.version, item);
 
     return super.create(item);
+  }
+
+  /**
+   * Delete a collection
+   *
+   * @param {Object} params
+   * @param {string} params.name - the collection name
+   * @param {string} params.version - the collection version
+   */
+  async delete(params = {}) {
+    const { name, version } = params;
+
+    const associatedRuleNames = (await this.getAssociatedRules(name, version))
+      .map((rule) => rule.name);
+
+    if (associatedRuleNames.length > 0) {
+      throw new AssociatedRulesError(
+        'Cannot delete a collection that has associated rules',
+        associatedRuleNames
+      );
+    }
+
+    await super.delete({ name, version });
+  }
+
+  /**
+   * Get any rules associated with the collection
+   *
+   * @param {string} name - collection name
+   * @param {string} version - collection version
+   * @returns {Promise<Object>}
+   */
+  async getAssociatedRules(name, version) {
+    const ruleModel = new Rule();
+
+    const scanResult = await ruleModel.scan(
+      {
+        names: {
+          '#c': 'collection',
+          '#n': 'name',
+          '#v': 'version'
+        },
+        filter: '#c.#n = :n AND #c.#v = :v',
+        values: {
+          ':n': name,
+          ':v': version
+        }
+      }
+    );
+
+    return scanResult.Items;
   }
 }
 

@@ -1,11 +1,8 @@
 default:
   prefix: test-cumulus-integration
   stackName: '{{prefix}}-iam'
-  authorizor: false
-  capabilities:
-    - CAPABILITY_NAMED_IAM
 
-  system_bucket: cumulus-test-sandbox-internal
+  system_bucket: '{{buckets.internal.name}}'
 
   buckets:
     internal:
@@ -96,6 +93,49 @@ lf:
       name: lf-protected-2
       type: protected
 
+lf-int-test:
+  prefix: lf-int-test
+  stackName: lf-int-test-iam
+
+  buckets:
+    internal:
+      name: lf-internal
+      type: internal
+    private:
+      name: lf-private
+      type: private
+    protected:
+      name: lf-protected
+      type: protected
+    public:
+      name: lf-cumulus-public
+      type: public
+    protected-2:
+      name: lf-protected-2
+      type: protected
+
+lf-sit:
+  prefix: lf-sit
+  stackName: lf-sit-iam
+  useNgapPermissionBoundary: true
+
+  buckets:
+    internal:
+      name: lf-sit-internal
+      type: internal
+    private:
+      name: lf-sit-private
+      type: private
+    protected:
+      name: lf-sit-protected
+      type: protected
+    public:
+      name: lf-sit-public
+      type: public
+    protected-2:
+      name: lf-sit-protected
+      type: protected
+
 jl:
   prefix: jl-test-integration
   buckets:
@@ -115,9 +155,23 @@ jl:
       name: rvl-internal
       type: shared
 
-kk-deploy-uat:
+kk-uat-deployment:
   prefix: kk-test-uat
   stackName: kk-test-uat-iam
+  system_bucket: '{{prefix}}-internal'
+  buckets:
+    internal:
+      name: '{{prefix}}-internal'
+      type: internal
+    private:
+      name: '{{prefix}}-private'
+      type: private
+    protected:
+      name: '{{prefix}}-protected'
+      type: protected
+    public:
+      name: '{{prefix}}-public'
+      type: public
 
 mth-2:
   prefix: mth-2
@@ -198,3 +252,6 @@ mboyd-test:
 mboyd-int:
   prefix: mboyd-int
   stackName: mboyd-int-iam
+
+pq:
+  prefix: pq

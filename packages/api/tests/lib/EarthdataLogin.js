@@ -16,7 +16,7 @@ test.beforeEach(() => {
 
 test('The EarthdataLogin constructor throws a TypeError if clientId is not specified', (t) => {
   const err = t.throws(() => {
-    new EarthdataLogin({ // eslint-disable-line no-new
+    new EarthdataLogin({
       clientPassword: 'client-password',
       earthdataLoginUrl: 'http://www.example.com',
       redirectUri: 'http://www.example.com/cb'
@@ -29,7 +29,7 @@ test('The EarthdataLogin constructor throws a TypeError if clientId is not speci
 
 test('The EarthdataLogin constructor throws a TypeError if clientPassword is not specified', (t) => {
   const err = t.throws(() => {
-    new EarthdataLogin({ // eslint-disable-line no-new
+    new EarthdataLogin({
       clientId: 'client-id',
       earthdataLoginUrl: 'http://www.example.com',
       redirectUri: 'http://www.example.com/cb'
@@ -42,7 +42,7 @@ test('The EarthdataLogin constructor throws a TypeError if clientPassword is not
 
 test('The EarthdataLogin constructor throws a TypeError if earthdataLoginUrl is not specified', (t) => {
   const err = t.throws(() => {
-    new EarthdataLogin({ // eslint-disable-line no-new
+    new EarthdataLogin({
       clientId: 'client-id',
       clientPassword: 'client-password',
       redirectUri: 'http://www.example.com/cb'
@@ -55,7 +55,7 @@ test('The EarthdataLogin constructor throws a TypeError if earthdataLoginUrl is 
 
 test('The EarthdataLogin constructor throws a TypeError if earthdataLoginUrl is not a valid URL', (t) => {
   t.throws(() => {
-    new EarthdataLogin({ // eslint-disable-line no-new
+    new EarthdataLogin({
       clientId: 'client-id',
       clientPassword: 'client-password',
       earthdataLoginUrl: 'asdf',
@@ -67,7 +67,7 @@ test('The EarthdataLogin constructor throws a TypeError if earthdataLoginUrl is 
 
 test('The EarthdataLogin constructor throws a TypeError if redirectUri is not specified', (t) => {
   const err = t.throws(() => {
-    new EarthdataLogin({ // eslint-disable-line no-new
+    new EarthdataLogin({
       clientId: 'client-id',
       clientPassword: 'client-password',
       earthdataLoginUrl: 'http://www.example.com'
@@ -80,7 +80,7 @@ test('The EarthdataLogin constructor throws a TypeError if redirectUri is not sp
 
 test('The EarthdataLogin constructor throws a TypeError if redirectUri is not a valid URL', (t) => {
   t.throws(() => {
-    new EarthdataLogin({ // eslint-disable-line no-new
+    new EarthdataLogin({
       clientId: 'client-id',
       clientPassword: 'client-password',
       earthdataLoginUrl: 'http://www.example.com',
@@ -226,6 +226,7 @@ test.serial('EarthdataLogin.getAccessToken() returns token information for a val
 
   t.is(accessToken, 'access-token');
   t.is(refreshToken, 'refresh-token');
+  // expires_in (100 seconds) * 1000 = 1000000 milliseconds
   t.true(expirationTime >= requestStartTime + (100 * 1000));
   t.true(expirationTime <= requestEndTime + (100 * 1000));
   t.is(username, 'sidney');
@@ -268,6 +269,155 @@ test.serial('EarthdataLogin.getAccessToken() throws an OAuth2AuthenticationError
 
   try {
     await earthdataLogin.getAccessToken('authorization-code');
+    t.fail('Expected a OAuth2AuthenticationError error');
+  }
+  catch (err) {
+    t.true(err instanceof OAuth2AuthenticationError);
+  }
+
+  t.true(tokenRequest.isDone());
+});
+
+test('EarthdataLogin.refreshAccessToken() throws a TypeError if refreshToken is not set', async (t) => {
+  const earthdataLogin = new EarthdataLogin({
+    clientId: 'client-id',
+    clientPassword: 'client-password',
+    earthdataLoginUrl: 'http://www.example.com',
+    redirectUri: 'http://www.example.com/cb'
+  });
+
+  try {
+    await earthdataLogin.refreshAccessToken();
+    t.fail('Expected refreshAccessToken to throw an error');
+  }
+  catch (err) {
+    t.true(err instanceof TypeError);
+    t.is(err.message, 'refreshToken is required');
+  }
+});
+
+test.serial('EarthdataLogin.refreshAccessToken() sends a correct request to the token endpoint', async (t) => {
+  const earthdataLogin = new EarthdataLogin({
+    clientId: 'client-id',
+    clientPassword: 'client-password',
+    earthdataLoginUrl: 'http://www.example.com',
+    redirectUri: 'http://www.example.com/cb'
+  });
+
+  const tokenRequest = nock(
+    'http://www.example.com',
+    {
+      reqHeaders: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    }
+  )
+    .post(
+      '/oauth/token',
+      (body) => {
+        const parsedBody = new URLSearchParams(body);
+
+        return parsedBody.get('grant_type') === 'refresh_token'
+          && parsedBody.get('refresh_token') === 'refresh-token';
+      }
+    )
+    .basicAuth({
+      user: 'client-id',
+      pass: 'client-password'
+    })
+    .reply(
+      200,
+      {
+        access_token: 'access-token',
+        token_type: 'bearer',
+        expires_in: 123,
+        refresh_token: 'refresh-token',
+        endpoint: '/api/users/sidney'
+      }
+    );
+
+  await earthdataLogin.refreshAccessToken('refresh-token');
+
+  t.true(tokenRequest.isDone());
+});
+
+test.serial('EarthdataLogin.refreshAccessToken() returns token information for a valid refreshToken', async (t) => {
+  const earthdataLogin = new EarthdataLogin({
+    clientId: 'client-id',
+    clientPassword: 'client-password',
+    earthdataLoginUrl: 'http://www.example.com',
+    redirectUri: 'http://www.example.com/cb'
+  });
+
+  const tokenRequest = nock('http://www.example.com')
+    .post('/oauth/token')
+    .reply(
+      200,
+      {
+        access_token: 'access-token',
+        token_type: 'bearer',
+        expires_in: 100,
+        refresh_token: 'refresh-token',
+        endpoint: '/api/users/sidney'
+      }
+    );
+
+  const requestStartTime = Date.now();
+  const {
+    accessToken,
+    refreshToken,
+    expirationTime,
+    username
+  } = await earthdataLogin.refreshAccessToken('refresh-token');
+  const requestEndTime = Date.now();
+
+  t.true(tokenRequest.isDone());
+
+  t.is(accessToken, 'access-token');
+  t.is(refreshToken, 'refresh-token');
+  // expires_in (100 seconds) * 1000 = 1000000 milliseconds
+  t.true(expirationTime >= requestStartTime + (100 * 1000));
+  t.true(expirationTime <= requestEndTime + (100 * 1000));
+  t.is(username, 'sidney');
+});
+
+test.serial('EarthdataLogin.refreshAccessToken() throws an OAuth2AuthenticationFailure error for an invalid refreshToken', async (t) => {
+  const earthdataLogin = new EarthdataLogin({
+    clientId: 'client-id',
+    clientPassword: 'client-password',
+    earthdataLoginUrl: 'http://www.example.com',
+    redirectUri: 'http://www.example.com/cb'
+  });
+
+  const tokenRequest = nock('http://www.example.com')
+    .post('/oauth/token')
+    .reply(400);
+
+  try {
+    await earthdataLogin.refreshAccessToken('invalid-refresh-token');
+    t.fail('Expected a OAuth2AuthenticationFailure error');
+  }
+  catch (err) {
+    t.true(err instanceof OAuth2AuthenticationFailure);
+  }
+
+  t.true(tokenRequest.isDone());
+});
+
+test.serial('EarthdataLogin.refreshAccessToken() throws an OAuth2AuthenticationError error if there is a problem with the Earthdata Login service', async (t) => {
+  const earthdataLogin = new EarthdataLogin({
+    clientId: 'client-id',
+    clientPassword: 'client-password',
+    earthdataLoginUrl: 'http://www.example.com',
+    redirectUri: 'http://www.example.com/cb'
+  });
+
+  const tokenRequest = nock('http://www.example.com')
+    .post('/oauth/token')
+    .reply(500);
+
+  try {
+    await earthdataLogin.refreshAccessToken('refresh-token');
     t.fail('Expected a OAuth2AuthenticationError error');
   }
   catch (err) {

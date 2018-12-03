@@ -16,6 +16,9 @@ class Rule extends Manager {
       schema: rule
     });
 
+    this.eventMapping = { arn: 'arn', logEventArn: 'logEventArn' };
+    this.kinesisSourceEvents = [{ name: process.env.messageConsumer, eventType: 'arn' },
+      { name: process.env.KinesisInboundEventLogger, eventType: 'logEventArn' }];
     this.targetId = 'lambdaTarget';
   }
 
@@ -40,9 +43,16 @@ class Rule extends Manager {
       await Events.deleteEvent(name);
       break;
     }
-    case 'kinesis':
-      await this.deleteKinesisEventSource(item);
+    case 'kinesis': {
+      await this.deleteKinesisEventSources(item);
       break;
+    }
+    case 'sns': {
+      if (item.state === 'ENABLED') {
+        await this.deleteSnsTrigger(item);
+      }
+      break;
+    }
     default:
       break;
     }
@@ -57,8 +67,10 @@ class Rule extends Manager {
    * @returns {Promise} the response from database updates
    */
   async update(original, updated) {
-    if (updated.state) {
+    let stateChanged = false;
+    if (updated.state && updated.state !== original.state) {
       original.state = updated.state;
+      stateChanged = true;
     }
 
     let valueUpdated = false;
@@ -76,14 +88,29 @@ class Rule extends Manager {
     }
     case 'kinesis':
       if (valueUpdated) {
-        await this.deleteKinesisEventSource(original);
-        await this.addKinesisEventSource(original);
+        await this.deleteKinesisEventSources(original);
+        await this.addKinesisEventSources(original);
         updated.rule.arn = original.rule.arn;
       }
       else {
-        await this.updateKinesisEventSource(original);
+        await this.updateKinesisEventSources(original);
       }
       break;
+    case 'sns': {
+      if (valueUpdated || stateChanged) {
+        if (original.rule.arn) {
+          await this.deleteSnsTrigger(original);
+          if (!updated.rule) updated.rule = original.rule;
+          delete updated.rule.arn;
+        }
+        if (original.state === 'ENABLED') {
+          await this.addSnsTrigger(original);
+          if (!updated.rule) updated.rule = original.rule;
+          else updated.rule.arn = original.rule.arn;
+        }
+      }
+      break;
+    }
     default:
       break;
     }
@@ -105,6 +132,7 @@ class Rule extends Manager {
       provider: item.provider,
       collection: item.collection,
       meta: get(item, 'meta', {}),
+      cumulus_meta: get(item, 'cumulus_meta', {}),
       payload: get(item, 'payload', {})
     };
   }
@@ -134,9 +162,16 @@ class Rule extends Manager {
       await this.addRule(item, payload);
       break;
     }
-    case 'kinesis':
-      await this.addKinesisEventSource(item);
+    case 'kinesis': {
+      await this.addKinesisEventSources(item);
       break;
+    }
+    case 'sns': {
+      if (item.state === 'ENABLED') {
+        await this.addSnsTrigger(item);
+      }
+      break;
+    }
     default:
       throw new Error('Type not supported');
     }
@@ -145,77 +180,122 @@ class Rule extends Manager {
     return super.create(item);
   }
 
+
   /**
-   * add an event source to the kinesis consumer lambda function
+   * Add  event sources for all mappings in the kinesisSourceEvents
+   * @param {Object} item - the rule item
+   * @returns {Object} return updated rule item containing new arn/logEventArn
+   */
+  async addKinesisEventSources(item) {
+    const sourceEventPromises = this.kinesisSourceEvents.map(
+      (lambda) => this.addKinesisEventSource(item, lambda)
+    );
+    const eventAdd = await Promise.all(sourceEventPromises);
+    item.rule.arn = eventAdd[0].UUID;
+    item.rule.logEventArn = eventAdd[1].UUID;
+    return item;
+  }
+
+
+  /**
+   * add an event source to a target lambda function
    *
-   * @param {*} item - the rule item
+   * @param {Object} item - the rule item
+   * @param {string} lambda - the name of the target lambda
    * @returns {Promise} a promise
    * @returns {Promise} updated rule item
    */
-  async addKinesisEventSource(item) {
+  async addKinesisEventSource(item, lambda) {
     // use the existing event source mapping if it already exists and is enabled
-    const listParams = { FunctionName: process.env.kinesisConsumer };
+    const listParams = { FunctionName: lambda.name };
     const listData = await aws.lambda(listParams).listEventSourceMappings().promise();
     if (listData.EventSourceMappings && listData.EventSourceMappings.length > 0) {
       const mappingExists = listData.EventSourceMappings
         .find((mapping) => { // eslint-disable-line arrow-body-style
-          return (mapping.EventSourceArn === item.rule.value);
+          return (mapping.EventSourceArn === item.rule.value
+                  && mapping.FunctionArn.includes(lambda.name));
         });
       if (mappingExists) {
         if (mappingExists.State === 'Enabled') {
-          item.rule.arn = mappingExists.UUID;
-          return item;
+          return mappingExists;
         }
         await this.deleteKinesisEventSource({
           name: item.name,
           rule: {
             arn: mappingExists.UUID,
-            type: 'kinesis'
+            type: item.rule.type
           }
-        });
+        }, lambda.type);
       }
     }
 
     // create event source mapping
     const params = {
       EventSourceArn: item.rule.value,
-      FunctionName: process.env.kinesisConsumer,
+      FunctionName: lambda.name,
       StartingPosition: 'TRIM_HORIZON',
       Enabled: item.state === 'ENABLED'
     };
-
     const data = await aws.lambda().createEventSourceMapping(params).promise();
-    item.rule.arn = data.UUID;
-    return item;
+    return data;
+  }
+
+  /**
+   * Update event sources for all mappings in the kinesisSourceEvents
+   * @param {*} item - the rule item
+   * @returns {Promise<Array>} array of responses from the event source update
+   */
+  async updateKinesisEventSources(item) {
+    const updateEvent = this.kinesisSourceEvents.map(
+      (lambda) => this.updateKinesisEventSource(item, lambda.eventType)
+    );
+    return Promise.all(updateEvent);
   }
 
   /**
    * update an event source, only the state can be updated
    *
-   * @param {*} item - the rule item
+   * @param {Object} item - the rule item
+   * @param {string} eventType - kinesisSourceEvent Type
    * @returns {Promise} the response from event source update
    */
-  updateKinesisEventSource(item) {
+  updateKinesisEventSource(item, eventType) {
     const params = {
-      UUID: item.rule.arn,
+      UUID: item.rule[this.eventMapping[eventType]],
       Enabled: item.state === 'ENABLED'
     };
     return aws.lambda().updateEventSourceMapping(params).promise();
   }
 
+
   /**
-   * deletes an event source from the kinesis consumer lambda function
+   * Delete event source mappings for all mappings in the kinesisSourceEvents
+   * @param {Object} item - the rule item
+   * @returns {Promise<Array>} array of responses from the event source deletion
+   */
+  async deleteKinesisEventSources(item) {
+    const deleteEventPromises = this.kinesisSourceEvents.map(
+      (lambda) => this.deleteKinesisEventSource(item, lambda.eventType)
+    );
+    const eventDelete = await Promise.all(deleteEventPromises);
+    item.rule.arn = eventDelete[0];
+    item.rule.logEventArn = eventDelete[1];
+    return item;
+  }
+
+  /**
+   * deletes an event source from an event lambda function
    *
-   * @param {*} item - the rule item
+   * @param {Object} item - the rule item
+   * @param {string} eventType - kinesisSourceEvent Type
    * @returns {Promise} the response from event source delete
    */
-  async deleteKinesisEventSource(item) {
-    if (await this.isEventSourceMappingShared(item)) {
+  async deleteKinesisEventSource(item, eventType) {
+    if (await this.isEventSourceMappingShared(item, eventType)) {
       return undefined;
     }
-
     const params = {
-      UUID: item.rule.arn
+      UUID: item.rule[this.eventMapping[eventType]]
     };
     return aws.lambda().deleteEventSourceMapping(params).promise();
   }
@@ -224,25 +304,97 @@ class Rule extends Manager {
    * check if a rule's event source mapping is shared with other rules
    *
    * @param {Object} item - the rule item
+   * @param {string} eventType - kinesisSourceEvent Type
    * @returns {boolean} return true if no other rules share the same event source mapping
    */
-  async isEventSourceMappingShared(item) {
-    const kinesisRules = await super.scan({
-      names: {
-        '#nm': 'name',
-        '#rl': 'rule',
-        '#tp': 'type',
-        '#arn': 'arn'
-      },
-      filter: '#nm <> :name AND #rl.#tp = :ruleType AND #rl.#arn = :arn',
-      values: {
-        ':name': item.name,
-        ':ruleType': item.rule.type,
-        ':arn': item.rule.arn
-      }
-    });
+  async isEventSourceMappingShared(item, eventType) {
+    const arnClause = `#rl.#${this.eventMapping[eventType]} = :${this.eventMapping[eventType]}`;
+    const queryNames = {
+      '#nm': 'name',
+      '#rl': 'rule',
+      '#tp': 'type'
+    };
+    queryNames[`#${eventType}`] = eventType;
 
+    const queryValues = {
+      ':name': item.name,
+      ':ruleType': item.rule.type
+    };
+    queryValues[`:${eventType}`] = item.rule[eventType];
+
+    const kinesisRules = await super.scan({
+      names: queryNames,
+      filter: `#nm <> :name AND #rl.#tp = :ruleType AND ${arnClause}`,
+      values: queryValues
+    });
     return (kinesisRules.Count && kinesisRules.Count > 0);
+  }
+
+  async addSnsTrigger(item) {
+    // check for existing subscription
+    let token;
+    let subExists = false;
+    let subscriptionArn;
+    /* eslint-disable no-await-in-loop */
+    do {
+      const subsResponse = await aws.sns().listSubscriptionsByTopic({
+        TopicArn: item.rule.value,
+        NextToken: token
+      }).promise();
+      token = subsResponse.NextToken;
+      if (subsResponse.Subscriptions) {
+        /* eslint-disable no-loop-func */
+        subsResponse.Subscriptions.forEach((sub) => {
+          if (sub.Endpoint === process.env.messageConsumer) {
+            subExists = true;
+            subscriptionArn = sub.SubscriptionArn;
+          }
+        });
+      }
+      /* eslint-enable no-loop-func */
+      if (subExists) break;
+    }
+    while (token);
+    /* eslint-enable no-await-in-loop */
+    if (!subExists) {
+      // create sns subscription
+      const subscriptionParams = {
+        TopicArn: item.rule.value,
+        Protocol: 'lambda',
+        Endpoint: process.env.messageConsumer,
+        ReturnSubscriptionArn: true
+      };
+      const r = await aws.sns().subscribe(subscriptionParams).promise();
+      subscriptionArn = r.SubscriptionArn;
+    }
+    // create permission to invoke lambda
+    const permissionParams = {
+      Action: 'lambda:InvokeFunction',
+      FunctionName: process.env.messageConsumer,
+      Principal: 'sns.amazonaws.com',
+      SourceArn: item.rule.value,
+      StatementId: `${item.name}Permission`
+    };
+    await aws.lambda().addPermission(permissionParams).promise();
+
+    item.rule.arn = subscriptionArn;
+    return item;
+  }
+
+  async deleteSnsTrigger(item) {
+    // delete permission statement
+    const permissionParams = {
+      FunctionName: process.env.messageConsumer,
+      StatementId: `${item.name}Permission`
+    };
+    await aws.lambda().removePermission(permissionParams).promise();
+    // delete sns subscription
+    const subscriptionParams = {
+      SubscriptionArn: item.rule.arn
+    };
+    await aws.sns().unsubscribe(subscriptionParams).promise();
+
+    return item;
   }
 }
 
