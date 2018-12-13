@@ -4,7 +4,7 @@ const cloneDeep = require('lodash.clonedeep');
 const Crypto = require('@cumulus/ingest/crypto').DefaultProvider;
 
 const { AssociatedRulesError } = require('../lib/errors');
-const Model = require('./modelBase');
+const Model = require('./model');
 const Rule = require('./rules');
 const { RecordDoesNotExist } = require('../lib/errors');
 const { ProviderSchema } = require('./schemas').provider;
@@ -57,11 +57,9 @@ class Provider extends Model {
     }
   }
 
-
   encrypt(value) {
     return Crypto.encrypt(value);
   }
-
 
   decrypt(value) {
     return Crypto.decrypt(value);
