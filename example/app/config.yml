@@ -69,6 +69,15 @@ default:
     subnets:
       - '{{AWS_SUBNET}}'
 
+  rds:
+    user: '{{RDS_USER}}'
+    password: '{{RDS_PASSWORD}}'
+    databaseName: '{{stackName}}_cumulusDatabase'
+    engine: aur   ora
+    engineMode: provisioned
+    dbSubnetGroupName: default
+    dbInstanceClass: db.t2.small
+
   ecs:
     instanceType: t2.medium
     desiredInstances: 1

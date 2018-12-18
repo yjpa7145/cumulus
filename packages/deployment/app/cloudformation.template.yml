@@ -113,8 +113,25 @@ Resources:
 {{/each}}
 
   #################################################
-  # Nested CloudFormation Templates config BEGIN
+  # Nested CloudFormation Templates config END
   #################################################
+
+  CumulusRDSCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: '{{rds.user}}'
+      MasterUserPassword: '{{rds.password}}'
+      DatabaseName: {{stackName}}_CumulusRDS
+      Engine: aurora
+      EngineMode: provisioned
+      DBSubnetGroupName: 'default'
+
+  CumulusPrimaryRDSDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora
+      DBClusterIdentifier: !Ref CumulusRDSCluster
+      DBInstanceClass: {{rds.dbInstanceClass}}
 
   #################################################
   # Cumulus Custom Resource BEGIN
@@ -177,7 +194,7 @@ Resources:
     Properties:
     {{#if this.ReadMinCapacity}}
       MinCapacity: {{ this.ReadMinCapacity }}
-    {{else}}
+   {{else}}
       MinCapacity: 5
     {{/if}}
     {{#if this.ReadMaxCapacity}}
