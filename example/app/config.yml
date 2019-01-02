@@ -66,6 +66,7 @@ default:
 
   vpc:
     vpcId: '{{VPC_ID}}'
+
     subnets:
       - '{{AWS_SUBNET}}'
 
@@ -73,10 +74,21 @@ default:
     user: '{{RDS_USER}}'
     password: '{{RDS_PASSWORD}}'
     databaseName: '{{stackName}}_cumulusDatabase'
-    engine: aur   ora
-    engineMode: provisioned
+    engine: aurora
+    engineMode: serverless
     dbSubnetGroupName: default
     dbInstanceClass: db.t2.small
+    scaling:
+      maxCapacity: 2
+      minCapacity: 2
+      autoPause: true
+      secondsUntilAutoPause: 300
+    subnet:
+      name: '{{stackName}}_sububnet'
+      description: 'Cumulus database subnet for {{stackName}}'
+      subnetIds:
+        - '{{DEV_SUBNET1}}'
+        - '{{DEV_SUBNET2}}'
 
   ecs:
     instanceType: t2.medium

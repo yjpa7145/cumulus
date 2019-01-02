@@ -116,6 +116,7 @@ Resources:
   # Nested CloudFormation Templates config END
   #################################################
 
+{{#ifEquals rds.engineMode 'foo'}}
   CumulusRDSCluster:
     Type: AWS::RDS::DBCluster
     Properties:
@@ -124,14 +125,41 @@ Resources:
       DatabaseName: {{stackName}}_CumulusRDS
       Engine: aurora
       EngineMode: provisioned
-      DBSubnetGroupName: 'default'
+      DBSubnetGroupName: {{rds.dbSubnetGroupName}}
 
   CumulusPrimaryRDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      Engine: aurora
+      Engine: {{rds.engine}}
       DBClusterIdentifier: !Ref CumulusRDSCluster
       DBInstanceClass: {{rds.dbInstanceClass}}
+{{/ifEquals}}
+{{#ifEquals rds.engineMode 'bar'}}
+  CumulusRDSCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: '{{rds.user}}'
+      MasterUserPassword: '{{rds.password}}'
+      DatabaseName: {{stackName}}_CumulusRDS
+      Engine: aurora
+      EngineMode: serverless
+      DBSubnetGroupName: '{{rds.subnet.name}}'
+      ScalingConfiguration:
+        AutoPause: {{rds.scaling.autoPause}}
+        MaxCapacity: {{rds.scaling.maxCapacity}}
+        MinCapacity: {{rds.scaling.minCapacity}}
+        SecondsUntilAutoPause: {{rds.scaling.secondsUntilAutoPause}}
+    DependsOn: CumulusRDSSubnetGroup
+  CumulusRDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: '{{rds.subnet.name}}'
+      DBSubnetGroupDescription: {{rds.subnet.description}}
+      SubnetIds:
+        {{#each rds.subnet.subnetIds}}
+        - {{this}}
+         {{/each}}
+{{/ifEquals}}
 
   #################################################
   # Cumulus Custom Resource BEGIN
@@ -731,7 +759,7 @@ Resources:
             - GroupId
         SubnetIds:
         {{#each ../vpc.subnets}}
-          - {{this}}
+          - "{{this}}"
         {{/each}}
     {{/if}}
   {{/if}}
