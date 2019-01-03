@@ -5,86 +5,116 @@ const aws = require('@cumulus/common/aws');
 const { randomString } = require('@cumulus/common/test-utils');
 const models = require('../../models');
 
+const {
+  fakeCollectionFactory,
+  fakeProviderFactory
+} = require('../../lib/testUtils');
+const { Provider } = require('../../models');
+
 process.env.RulesTable = `RulesTable_${randomString()}`;
 process.env.stackName = 'my-stackName';
-process.env.messageConsumer = 'my-messageConsumer';
-process.env.KinesisInboundEventLogger = 'my-ruleInput';
 process.env.bucket = randomString();
+process.env.internal = process.env.bucket;
 
 const workflow = 'my-workflow';
 const workflowfile = `${process.env.stackName}/workflows/${workflow}.json`;
-
-const kinesisRule = {
-  name: 'my_kinesis_rule',
-  workflow: 'my-workflow',
-  provider: 'my-provider',
-  collection: {
-    name: 'my-collection-name',
-    version: 'my-collection-version'
-  },
-  rule: {
-    type: 'kinesis',
-    value: 'my-kinesis-arn'
-  },
-  state: 'DISABLED'
-};
-
-const onetimeRule = {
-  name: 'my_one_time_rule',
-  workflow: 'my-workflow',
-  provider: 'my-provider',
-  collection: {
-    name: 'my-collection-name',
-    version: 'my-collection-version'
-  },
-  rule: {
-    type: 'onetime'
-  },
-  state: 'ENABLED'
-};
 
 async function getKinesisEventMappings() {
   const eventLambdas = [process.env.messageConsumer, process.env.KinesisInboundEventLogger];
 
   const mappingPromises = eventLambdas.map((lambda) => {
-    const mappingParms = { FunctionName: lambda };
-    return aws.lambda().listEventSourceMappings(mappingParms).promise();
+    const mappingParams = { FunctionName: lambda };
+    return aws.lambda().listEventSourceMappings(mappingParams).promise();
   });
   return Promise.all(mappingPromises);
 }
 
+const suiteContext = {};
 
-let ruleModel;
 test.before(async () => {
   // create Rules table
-  ruleModel = new models.Rule();
-  await ruleModel.createTable();
-  await aws.s3().createBucket({ Bucket: process.env.bucket }).promise();
-  await aws.s3().putObject({
+  suiteContext.rulesModel = new models.Rule();
+  await suiteContext.rulesModel.createTable();
+
+  await aws.createS3Bucket({ Bucket: process.env.bucket });
+
+  await aws.putS3Object({
     Bucket: process.env.bucket,
     Key: workflowfile,
     Body: 'test data'
-  }).promise();
+  });
+
+  suiteContext.provider = fakeProviderFactory();
+  suiteContext.providersModel = new Provider();
+  await suiteContext.providersModel.create(suiteContext.provider);
+
+  suiteContext.collectionsModel = new models.Collection();
+
+  suiteContext.collection = fakeCollectionFactory();
+  await suiteContext.collectionsModel.create(suiteContext.collection);
+});
+
+test.beforeEach(async (t) => {
+  const { collection, provider } = suiteContext;
+
+  process.env.messageConsumer = randomString();
+  process.env.KinesisInboundEventLogger = randomString();
+
+  t.context.kinesisRule = {
+    name: randomString(),
+    workflow: 'my-workflow',
+    provider: provider.id,
+    collection: {
+      name: collection.name,
+      version: collection.version
+    },
+    rule: {
+      type: 'kinesis',
+      value: 'my-kinesis-arn'
+    },
+    state: 'DISABLED'
+  };
+
+  t.context.onetimeRule = {
+    name: randomString(),
+    workflow: 'my-workflow',
+    provider: provider.id,
+    collection: {
+      name: collection.name,
+      version: collection.version
+    },
+    rule: {
+      type: 'onetime'
+    },
+    state: 'ENABLED'
+  };
 });
 
 test.after.always(async () => {
+  const { rulesModel } = suiteContext;
+
   // cleanup table
-  await ruleModel.deleteTable();
+  await rulesModel.deleteTable();
   await aws.recursivelyDeleteS3Bucket(process.env.bucket);
 });
 
 test.serial('create and delete a onetime rule', async (t) => {
+  const { rulesModel } = suiteContext;
+  const { onetimeRule } = t.context;
+
   // create rule
-  const rules = new models.Rule();
-  return rules.create(onetimeRule)
-    .then(async (rule) => {
+  return rulesModel.create(onetimeRule)
+    .then((rule) => {
       t.is(rule.name, onetimeRule.name);
       // delete rule
-      await rules.delete(rule);
-    });
+      rulesModel.delete(rule);
+    })
+    .then(() => undefined);
 });
 
 test.serial('create a kinesis type rule adds event mappings, creates rule', async (t) => {
+  const { kinesisRule } = t.context;
+
   // create rule
   const rules = new models.Rule();
   const createdRule = await rules.create(kinesisRule);
@@ -108,12 +138,16 @@ test.serial('create a kinesis type rule adds event mappings, creates rule', asyn
 });
 
 test.serial('deleting a kinesis style rule removes event mappings', async (t) => {
+  const { kinesisRule } = t.context;
+
   // create and delete rule
   const rules = new models.Rule();
+
   const createdRule = await rules.create(kinesisRule);
   await rules.delete(createdRule);
 
   const kinesisEventMappings = await getKinesisEventMappings();
+
   const consumerEventMappings = kinesisEventMappings[0].EventSourceMappings;
   const logEventMappings = kinesisEventMappings[1].EventSourceMappings;
 
@@ -122,6 +156,8 @@ test.serial('deleting a kinesis style rule removes event mappings', async (t) =>
 });
 
 test.serial('update a kinesis type rule state, arn does not change', async (t) => {
+  const { kinesisRule } = t.context;
+
   // create rule
   const rules = new models.Rule();
   await rules.create(kinesisRule);
@@ -142,6 +178,8 @@ test.serial('update a kinesis type rule state, arn does not change', async (t) =
 });
 
 test.serial('update a kinesis type rule value, resulting in new arn', async (t) => {
+  const { kinesisRule } = t.context;
+
   // create rule
   const rules = new models.Rule();
   await rules.create(kinesisRule);
@@ -158,15 +196,16 @@ test.serial('update a kinesis type rule value, resulting in new arn', async (t) 
   await rules.update(newRule, updated);
 
   t.is(newRule.name, rule.name);
-  t.not(newRule.rule.vale, rule.rule.value);
+  t.not(newRule.rule.value, rule.rule.value);
   t.not(newRule.rule.arn, rule.rule.arn);
   t.not(newRule.rule.logEventArn, rule.rule.logEventArn);
 
   await rules.delete(rule);
-  await rules.delete(newRule);
 });
 
 test.serial('create a kinesis type rule, using the existing event source mappings', async (t) => {
+  const { kinesisRule } = t.context;
+
   // create two rules with same value
   const rules = new models.Rule();
   const newKinesisRule = Object.assign({}, kinesisRule);
@@ -192,6 +231,8 @@ test.serial('create a kinesis type rule, using the existing event source mapping
 });
 
 test.serial('it does not delete event source mappings if they exist for other rules', async (t) => {
+  const { kinesisRule } = t.context;
+
   // we have three rules to create
   const kinesisRuleTwo = Object.assign({}, kinesisRule);
   kinesisRuleTwo.rule = Object.assign({}, kinesisRule.rule);

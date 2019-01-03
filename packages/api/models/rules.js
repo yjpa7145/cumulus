@@ -1,20 +1,115 @@
-/* eslint no-param-reassign: "off" */
-
 'use strict';
 
 const get = require('lodash.get');
 const { invoke, Events } = require('@cumulus/ingest/aws');
 const aws = require('@cumulus/common/aws');
-const Manager = require('./base');
-const { rule } = require('./schemas');
 
-class Rule extends Manager {
+const Model = require('./Model');
+const knex = require('../db/knex');
+
+const collectionsGateway = require('../db/collections-gateway');
+const rulesGateway = require('../db/rules-gateway');
+const tagsGateway = require('../db/tags-gateway');
+
+const { RecordDoesNotExist } = require('../lib/errors');
+
+function ruleModelToRecord(ruleModel, collectionId) {
+  const ruleRecord = {
+    name: ruleModel.name,
+    state: ruleModel.state,
+    workflow: ruleModel.workflow,
+    created_at: ruleModel.createdAt,
+    updated_at: ruleModel.updatedAt,
+    collection_id: collectionId,
+    provider_id: ruleModel.provider
+  };
+
+  if (ruleModel.rule) {
+    ruleRecord.rule_arn = ruleModel.rule.arn;
+    ruleRecord.rule_log_event_arn = ruleModel.rule.logEventArn;
+    ruleRecord.rule_type = ruleModel.rule.type;
+    ruleRecord.rule_value = ruleModel.rule.value;
+  }
+
+  if (ruleModel.meta) ruleRecord.meta = JSON.stringify(ruleModel.meta);
+
+  return ruleRecord;
+}
+
+function buildRuleModel(ruleRecord, collectionRecord) {
+  const ruleModel = {
+    name: ruleRecord.name,
+    rule: {
+      type: ruleRecord.rule_type
+    },
+    state: ruleRecord.state,
+    workflow: ruleRecord.workflow,
+    createdAt: ruleRecord.created_at,
+    updatedAt: ruleRecord.updated_at,
+    collection: {
+      name: collectionRecord.name,
+      version: collectionRecord.version
+    },
+    provider: ruleRecord.provider_id
+  };
+
+  if (ruleRecord.rule_arn) {
+    ruleModel.rule.arn = ruleRecord.rule_arn;
+  }
+  if (ruleRecord.rule_log_event_arn) {
+    ruleModel.rule.logEventArn = ruleRecord.rule_log_event_arn;
+  }
+  if (ruleRecord.rule_value) {
+    ruleModel.rule.value = ruleRecord.rule_value;
+  }
+
+  if (ruleRecord.meta) {
+    ruleModel.meta = JSON.parse(ruleRecord.meta);
+  }
+
+  return ruleModel;
+}
+
+async function insertRuleModel(db, ruleModel) {
+  const collectionRecord = await collectionsGateway.findByNameAndVersion(
+    db,
+    ruleModel.collection.name,
+    ruleModel.collection.version
+  );
+
+  if (!collectionRecord) {
+    throw new Error(`Unable to create rule, collection ${ruleModel.collection.name} ${ruleModel.collection.version} does not exist`);
+  }
+
+  return db.transaction(async (trx) => {
+    const ruleRecord = ruleModelToRecord(ruleModel, collectionRecord.id);
+
+    const ruleId = await rulesGateway.insert(trx, ruleRecord);
+
+    await tagsGateway.setRuleTags(db, ruleId, ruleModel.tags);
+
+    return ruleId;
+  });
+}
+
+function updateRuleModel(db, ruleModel) {
+  return db.transaction(async (trx) => {
+    const { id: ruleId } = await rulesGateway.findByName(db, ruleModel.name);
+
+    await tagsGateway.setRuleTags(trx, ruleId, ruleModel.tags);
+
+    const updates = ruleModelToRecord(ruleModel);
+    await rulesGateway.update(trx, ruleId, updates);
+  });
+}
+
+const privates = new WeakMap();
+
+class Rule extends Model {
   constructor() {
-    super({
-      tableName: process.env.RulesTable,
-      tableHash: { name: 'name', type: 'S' },
-      schema: rule
-    });
+    super();
+
+    privates.set(this, { db: knex() });
 
     this.eventMapping = { arn: 'arn', logEventArn: 'logEventArn' };
     this.kinesisSourceEvents = [{ name: process.env.messageConsumer, eventType: 'arn' },
@@ -35,7 +130,161 @@ class Rule extends Manager {
     return r.RuleArn;
   }
 
+  async get({ name }) {
+    const { db } = privates.get(this);
+
+    const ruleRecord = await rulesGateway.findByName(db, name);
+
+    if (ruleRecord === undefined) throw new RecordDoesNotExist();
+
+    const collectionRecord = await collectionsGateway.findById(db, ruleRecord.collection_id);
+
+    return buildRuleModel(ruleRecord, collectionRecord);
+  }
+
+  async getAll() {
+    // TODO This is poorly written and should be refactored
+
+    const { db } = privates.get(this);
+
+    const ruleRecords = await rulesGateway.find(db);
+
+    const results = [];
+
+    for (let ctr = 0; ctr < ruleRecords.length; ctr += 1) {
+      const ruleRecord = ruleRecords[ctr];
+
+      // eslint-disable-next-line no-await-in-loop
+      const collectionRecord = await collectionsGateway.findById(
+        db,
+        ruleRecord.collection_id
+      );
+      results.push(buildRuleModel(ruleRecord, collectionRecord));
+    }
+
+    return results;
+  }
+
+  async exists({ name }) {
+    const { db } = privates.get(this);
+
+    const ruleRecord = await rulesGateway.findByName(db, name);
+
+    return ruleRecord !== undefined;
+  }
+
+  async create(item) {
+    const { db } = privates.get(this);
+
+    // make sure the name only has word characters
+    const re = /[^\w]/;
+    if (re.test(item.name)) {
+      throw new Error('Names may only contain letters, numbers, and underscores.');
+    }
+
+    // the default state is 'ENABLED'
+    if (!item.state) item.state = 'ENABLED'; // eslint-disable-line no-param-reassign
+
+    const payload = await Rule.buildPayload(item);
+    switch (item.rule.type) {
+    case 'onetime': {
+      await invoke(process.env.invoke, payload);
+      break;
+    }
+    case 'scheduled': {
+      await this.addRule(item, payload);
+      break;
+    }
+    case 'kinesis': {
+      await this.addKinesisEventSources(item);
+      break;
+    }
+    case 'sns': {
+      if (item.state === 'ENABLED') {
+        await this.addSnsTrigger(item);
+      }
+      break;
+    }
+    default:
+      throw new Error('Type not supported');
+    }
+
+    await insertRuleModel(db, item);
+
+    return this.get({ name: item.name });
+  }
+
+  /**
+   * update a rule item
+   *
+   * @param {*} original - the original rule
+   * @param {*} updated - key/value fields for update, may not be a complete rule item
+   * @returns {Promise} the response from database updates
+   */
+  async update(original, updated) {
+    const { db } = privates.get(this);
+
+    let stateChanged = false;
+    if (updated.state && updated.state !== original.state) {
+      original.state = updated.state; // eslint-disable-line no-param-reassign
+      stateChanged = true;
+    }
+
+    let valueUpdated = false;
+    if (updated.rule && updated.rule.value) {
+      original.rule.value = updated.rule.value; // eslint-disable-line no-param-reassign
+      if (updated.rule.type === undefined) updated.rule.type = original.rule.type; // eslint-disable-line no-param-reassign, max-len
+      valueUpdated = true;
+    }
+
+    switch (original.rule.type) {
+    case 'scheduled': {
+      const payload = await Rule.buildPayload(original);
+      await this.addRule(original, payload);
+      break;
+    }
+    case 'kinesis':
+      if (valueUpdated) {
+        await this.deleteKinesisEventSources(original);
+        await this.addKinesisEventSources(original);
+        updated.rule.arn = original.rule.arn; // eslint-disable-line no-param-reassign
+      }
+      else {
+        await this.updateKinesisEventSources(original);
+      }
+      break;
+    case 'sns': {
+      if (valueUpdated || stateChanged) {
+        if (original.rule.arn) {
+          await this.deleteSnsTrigger(original);
+          if (!updated.rule) updated.rule = original.rule; // eslint-disable-line no-param-reassign
+          delete updated.rule.arn; // eslint-disable-line no-param-reassign
+        }
+        if (original.state === 'ENABLED') {
+          await this.addSnsTrigger(original);
+          if (!updated.rule) updated.rule = original.rule; // eslint-disable-line no-param-reassign
+          else updated.rule.arn = original.rule.arn; // eslint-disable-line no-param-reassign
+        }
+      }
+      break;
+    }
+    default:
+      break;
+    }
+
+    const updatedModel = {
+      ...updated,
+      name: original.name
+    };
+
+    await updateRuleModel(db, updatedModel);
+
+    return this.get({ name: original.name });
+  }
+
   async delete(item) {
+    const { db } = privates.get(this);
+
     switch (item.rule.type) {
     case 'scheduled': {
       const name = `${process.env.stackName}-custom-${item.name}`;
@@ -56,66 +305,9 @@ class Rule extends Manager {
     default:
       break;
     }
-    return super.delete({ name: item.name });
-  }
 
-  /**
-   * update a rule item
-   *
-   * @param {*} original - the original rule
-   * @param {*} updated - key/value fields for update, may not be a complete rule item
-   * @returns {Promise} the response from database updates
-   */
-  async update(original, updated) {
-    let stateChanged = false;
-    if (updated.state && updated.state !== original.state) {
-      original.state = updated.state;
-      stateChanged = true;
-    }
-
-    let valueUpdated = false;
-    if (updated.rule && updated.rule.value) {
-      original.rule.value = updated.rule.value;
-      if (updated.rule.type === undefined) updated.rule.type = original.rule.type;
-      valueUpdated = true;
-    }
-
-    switch (original.rule.type) {
-    case 'scheduled': {
-      const payload = await Rule.buildPayload(original);
-      await this.addRule(original, payload);
-      break;
-    }
-    case 'kinesis':
-      if (valueUpdated) {
-        await this.deleteKinesisEventSources(original);
-        await this.addKinesisEventSources(original);
-        updated.rule.arn = original.rule.arn;
-      }
-      else {
-        await this.updateKinesisEventSources(original);
-      }
-      break;
-    case 'sns': {
-      if (valueUpdated || stateChanged) {
-        if (original.rule.arn) {
-          await this.deleteSnsTrigger(original);
-          if (!updated.rule) updated.rule = original.rule;
-          delete updated.rule.arn;
-        }
-        if (original.state === 'ENABLED') {
-          await this.addSnsTrigger(original);
-          if (!updated.rule) updated.rule = original.rule;
-          else updated.rule.arn = original.rule.arn;
-        }
-      }
-      break;
-    }
-    default:
-      break;
-    }
-
-    return super.update({ name: original.name }, updated);
+    const ruleRecord = await rulesGateway.findByName(db, item.name);
+    await rulesGateway.delete(db, ruleRecord.id);
   }
 
   static async buildPayload(item) {
@@ -142,45 +334,6 @@ class Rule extends Manager {
     await invoke(process.env.invoke, payload);
   }
 
-  async create(item) {
-    // make sure the name only has word characters
-    const re = /[^\w]/;
-    if (re.test(item.name)) {
-      throw new Error('Names may only contain letters, numbers, and underscores.');
-    }
-
-    // the default state is 'ENABLED'
-    if (!item.state) item.state = 'ENABLED';
-
-    const payload = await Rule.buildPayload(item);
-    switch (item.rule.type) {
-    case 'onetime': {
-      await invoke(process.env.invoke, payload);
-      break;
-    }
-    case 'scheduled': {
-      await this.addRule(item, payload);
-      break;
-    }
-    case 'kinesis': {
-      await this.addKinesisEventSources(item);
-      break;
-    }
-    case 'sns': {
-      if (item.state === 'ENABLED') {
-        await this.addSnsTrigger(item);
-      }
-      break;
-    }
-    default:
-      throw new Error('Type not supported');
-    }
-
-    // save
-    return super.create(item);
-  }
-
-
   /**
    * Add  event sources for all mappings in the kinesisSourceEvents
    * @param {Object} item - the rule item
@@ -191,11 +344,10 @@ class Rule extends Manager {
       (lambda) => this.addKinesisEventSource(item, lambda)
     );
     const eventAdd = await Promise.all(sourceEventPromises);
-    item.rule.arn = eventAdd[0].UUID;
-    item.rule.logEventArn = eventAdd[1].UUID;
+    item.rule.arn = eventAdd[0].UUID; // eslint-disable-line no-param-reassign
+    item.rule.logEventArn = eventAdd[1].UUID; // eslint-disable-line no-param-reassign
     return item;
   }
-
 
   /**
    * add an event source to a target lambda function
@@ -236,8 +388,8 @@ class Rule extends Manager {
       StartingPosition: 'TRIM_HORIZON',
       Enabled: item.state === 'ENABLED'
     };
-    const data = await aws.lambda().createEventSourceMapping(params).promise();
-    return data;
+
+    return aws.lambda().createEventSourceMapping(params).promise();
   }
 
   /**
@@ -267,7 +419,6 @@ class Rule extends Manager {
     return aws.lambda().updateEventSourceMapping(params).promise();
   }
 
-
   /**
    * Delete event source mappings for all mappings in the kinesisSourceEvents
    * @param {Object} item - the rule item
@@ -278,8 +429,8 @@ class Rule extends Manager {
       (lambda) => this.deleteKinesisEventSource(item, lambda.eventType)
     );
     const eventDelete = await Promise.all(deleteEventPromises);
-    item.rule.arn = eventDelete[0];
-    item.rule.logEventArn = eventDelete[1];
+    item.rule.arn = eventDelete[0]; // eslint-disable-line no-param-reassign
+    item.rule.logEventArn = eventDelete[1]; // eslint-disable-line no-param-reassign
     return item;
   }
 
@@ -297,6 +448,7 @@ class Rule extends Manager {
     const params = {
       UUID: item.rule[this.eventMapping[eventType]]
     };
+
     return aws.lambda().deleteEventSourceMapping(params).promise();
   }
 
@@ -308,26 +460,27 @@ class Rule extends Manager {
    * @returns {boolean} return true if no other rules share the same event source mapping
    */
   async isEventSourceMappingShared(item, eventType) {
-    const arnClause = `#rl.#${this.eventMapping[eventType]} = :${this.eventMapping[eventType]}`;
-    const queryNames = {
-      '#nm': 'name',
-      '#rl': 'rule',
-      '#tp': 'type'
-    };
-    queryNames[`#${eventType}`] = eventType;
+    const { db } = privates.get(this);
 
-    const queryValues = {
-      ':name': item.name,
-      ':ruleType': item.rule.type
+    const eventFieldMapping = {
+      arn: 'rule_arn',
+      logEventArn: 'rule_log_event_arn'
     };
-    queryValues[`:${eventType}`] = item.rule[eventType];
 
-    const kinesisRules = await super.scan({
-      names: queryNames,
-      filter: `#nm <> :name AND #rl.#tp = :ruleType AND ${arnClause}`,
-      values: queryValues
-    });
-    return (kinesisRules.Count && kinesisRules.Count > 0);
+    const kinesisRules = await rulesGateway.find(
+      db,
+      {
+        where: {
+          [eventFieldMapping[eventType]]: item.rule[eventType],
+          rule_type: item.rule.type
+        },
+        whereNot: {
+          name: item.name
+        }
+      }
+    );
+
+    return kinesisRules.length > 0;
   }
 
   async addSnsTrigger(item) {
@@ -377,7 +530,7 @@ class Rule extends Manager {
     };
     await aws.lambda().addPermission(permissionParams).promise();
 
-    item.rule.arn = subscriptionArn;
+    item.rule.arn = subscriptionArn; // eslint-disable-line no-param-reassign
     return item;
   }
 
@@ -397,5 +550,4 @@ class Rule extends Manager {
     return item;
   }
 }
-
 module.exports = Rule;

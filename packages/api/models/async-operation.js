@@ -1,11 +1,34 @@
 'use strict';
 
-const Ajv = require('ajv');
-const { ecs, s3 } = require('@cumulus/common/aws');
 const uuidv4 = require('uuid/v4');
-const schemas = require('./schemas');
+
+const { ecs, s3 } = require('@cumulus/common/aws');
+
+const asyncOperationsGateway = require('../db/async-operations-gateway');
+const knex = require('../db/knex');
+const Model = require('./Model');
+
 const { RecordDoesNotExist } = require('../lib/errors');
-const Registry = require('../Registry');
+
+function asyncOperationModelToRecord(model) {
+  return {
+    id: model.id,
+    output: model.output,
+    task_arn: model.taskArn,
+    status: model.status
+  };
+}
+
+function buildAsyncOperationModel(record) {
+  return {
+    id: record.id,
+    output: record.output,
+    taskArn: record.task_arn,
+    status: record.status
+  };
+}
+
+const privates = new WeakMap();
 
 /**
  * A class for tracking AsyncOperations using DynamoDB.
@@ -13,25 +36,7 @@ const Registry = require('../Registry');
  * @class AsyncOperation
  * @extends {Manager}
  */
-class AsyncOperation {
-  static recordIsValid(item, schema = null, removeAdditional = false) {
-    if (schemas.asyncOperation) {
-      const ajv = new Ajv({
-        useDefaults: true,
-        v5: true,
-        removeAdditional: removeAdditional
-      });
-      const validate = ajv.compile(schemas.asyncOperation);
-      const valid = validate(item);
-      if (!valid) {
-        const err = new Error('The record has validation errors');
-        err.name = 'SchemaValidationError';
-        err.detail = validate.errors;
-        throw err;
-      }
-    }
-  }
-
+class AsyncOperation extends Model {
   /**
    * Creates an instance of AsyncOperation.
    *
@@ -44,24 +49,37 @@ class AsyncOperation {
    * @memberof AsyncOperation
    */
   constructor(params) {
+    super();
+
     if (!params.stackName) throw new TypeError('stackName is required');
     if (!params.systemBucket) throw new TypeError('systemBucket is required');
 
     this.systemBucket = params.systemBucket;
     this.stackName = params.stackName;
+
+    privates.set(this, { db: knex() });
   }
 
   get tableName() {
     return 'deprecated';
   }
 
-  table() {
-    return Registry.knex()('async_operations');
+  /**
+   * Fetch the AsyncOperation with the given id
+   *
+   * @param {string} id - an AsyncOperation id
+   * @returns {Promise<Object>} - an AsyncOperation record
+   * @memberof AsyncOperation
+   */
+  async get(id) {
+    const { db } = privates.get(this);
+
+    const record = await asyncOperationsGateway.findById(db, id);
+
+    if (record === undefined) throw new RecordDoesNotExist();
+
+    return buildAsyncOperationModel(record);
   }
-
-  async createTable() {} // eslint-disable-line no-empty-function
-
-  async deleteTable() {} // eslint-disable-line no-empty-function
 
   /**
    * creates record(s)
@@ -71,6 +89,8 @@ class AsyncOperation {
    *   created record
    */
   async create(items) {
+    const { db } = privates.get(this);
+
     // This is confusing because the argument named "items" could either be
     // an Array of items or a single item.  To make this function a little
     // easier to understand, converting the single item case here to an array
@@ -82,42 +102,21 @@ class AsyncOperation {
       this.constructor.recordIsValid(item, this.schema, this.removeAdditional);
     });
 
-    const insertItems = itemsArray.map((i) => ({
-      id: i.id,
-      output: i.output,
-      task_arn: i.taskArn,
-      status: i.status
-    }));
+    await Promise.all(
+      itemsArray
+        .map(asyncOperationModelToRecord)
+        .map((record) => asyncOperationsGateway.insert(db, record))
+    );
 
-    await this.table().insert(insertItems);
+    const insertedItems = await Promise.all(
+      itemsArray
+        .map((i) => i.id)
+        .map((id) => this.get(id))
+    );
 
     // If the original item was an Array, return an Array.  If the original item
     // was an Object, return an Object.
-    return Array.isArray(items) ? itemsArray : itemsArray[0];
-  }
-
-  /**
-   * Fetch the AsyncOperation with the given id
-   *
-   * @param {string} id - an AsyncOperation id
-   * @returns {Promise<Object>} - an AsyncOperation record
-   * @memberof AsyncOperation
-   */
-  async get(id) {
-    const records = await this.table().where({ id });
-
-    if (records.length === 0) {
-      throw new RecordDoesNotExist('No record found');
-    }
-
-    const record = records[0];
-
-    return {
-      id: record.id,
-      output: record.output,
-      status: record.status,
-      taskArn: record.task_arn
-    };
+    return Array.isArray(items) ? insertedItems : insertedItems[0];
   }
 
   /**
@@ -131,15 +130,24 @@ class AsyncOperation {
    * @memberof AsyncOperation
    */
   async update(id, updates = {}, keysToDelete = []) {
-    await this.table()
-      .where({ id })
-      .update({
-        output: updates.output,
-        task_arn: updates.taskArn,
-        status: updates.status
-      });
+    const { db } = privates.get(this);
 
-    return { id };
+    const deletions = {};
+    keysToDelete.forEach((f) => {
+      deletions[f] = null;
+    });
+
+    const updatedModel = {
+      ...updates,
+      ...deletions,
+      id
+    };
+
+    const updatedRecord = asyncOperationModelToRecord(updatedModel);
+
+    await asyncOperationsGateway.update(db, id, updatedRecord);
+
+    return this.get(id);
   }
 
   /**

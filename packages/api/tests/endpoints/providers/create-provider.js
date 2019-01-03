@@ -116,18 +116,17 @@ test('POST with invalid authorization scheme returns an invalid authorization re
 });
 
 test('POST creates a new provider', (t) => {
-  const newProviderId = 'AQUA';
-  const newProvider = Object.assign({}, t.context.testProvider, { id: newProviderId });
+  const provider = fakeProviderFactory();
 
   const postEvent = {
     httpMethod: 'POST',
-    body: JSON.stringify(newProvider),
+    body: JSON.stringify(provider),
     headers: authHeaders
   };
 
   return testEndpoint(providerEndpoint, postEvent, (response) => {
     const { message, record } = JSON.parse(response.body);
     t.is(message, 'Record saved');
-    t.is(record.id, newProviderId);
+    t.is(record.id, provider.id);
   });
 });

@@ -1,89 +1,129 @@
 'use strict';
 
 const test = require('ava');
-const { randomString } = require('@cumulus/common/test-utils');
 const { recursivelyDeleteS3Bucket, s3 } = require('@cumulus/common/aws');
+const { randomString } = require('@cumulus/common/test-utils');
 
+const knex = require('../../db/knex');
+
+const { fakeCollectionFactory, fakeRuleFactoryV2 } = require('../../lib/testUtils');
 const { AssociatedRulesError } = require('../../lib/errors');
-const { Manager, Collection, Rule } = require('../../models');
-const { fakeRuleFactoryV2 } = require('../../lib/testUtils');
+const { Collection, Rule } = require('../../models');
 
-let manager;
-let ruleModel;
-
+const suiteContext = {};
 test.before(async () => {
-  process.env.CollectionsTable = randomString();
-
-  manager = new Manager({
-    tableName: process.env.CollectionsTable,
-    tableHash: { name: 'name', type: 'S' },
-    tableRange: { name: 'version', type: 'S' }
-  });
-
-  await manager.createTable();
-
-  process.env.RulesTable = randomString();
-  ruleModel = new Rule();
-  await ruleModel.createTable();
-
-  process.env.bucket = randomString();
-  await s3().createBucket({ Bucket: process.env.bucket }).promise();
+  suiteContext.db = knex();
 
   process.env.stackName = randomString();
+
+  suiteContext.systemBucket = randomString();
+  process.env.bucket = suiteContext.systemBucket;
+  process.env.internal = suiteContext.systemBucket;
+  await s3().createBucket({ Bucket: suiteContext.systemBucket }).promise();
+});
+
+test.beforeEach(async (t) => {
+  t.context = {
+    collectionsModel: new Collection(),
+    rulesModel: new Rule(),
+    collectionsToDelete: [],
+    rulesToDelete: []
+  };
+});
+
+test.afterEach.always(async (t) => {
+  const {
+    collectionsToDelete,
+    collectionsModel,
+    rulesModel,
+    rulesToDelete
+  } = t.context;
+
+  const deleteRule = (r) => rulesModel.delete(r);
+  await Promise.all(rulesToDelete.map(deleteRule));
+
+  const deleteCollection = (c) => collectionsModel.delete(c);
+  await Promise.all(collectionsToDelete.map(deleteCollection));
 });
 
 test.after.always(async () => {
-  await manager.deleteTable();
-  await ruleModel.deleteTable();
-  await recursivelyDeleteS3Bucket(process.env.bucket);
+  await recursivelyDeleteS3Bucket(suiteContext.systemBucket);
 });
 
 test('Collection.exists() returns true when a record exists', async (t) => {
-  const name = randomString();
-  const version = randomString();
+  const {
+    collectionsModel,
+    collectionsToDelete
+  } = t.context;
 
-  await manager.create({ name, version });
+  const collection = fakeCollectionFactory();
 
-  const collectionsModel = new Collection();
+  await collectionsModel.create(collection);
 
-  t.true(await collectionsModel.exists(name, version));
+  collectionsToDelete.push({
+    name: collection.name,
+    version: collection.version
+  });
+
+  const collectionExists = collectionsModel.exists(
+    collection.name,
+    collection.version
+  );
+
+  t.true(await collectionExists);
 });
 
 test('Collection.exists() returns false when a record does not exist', async (t) => {
-  const collectionsModel = new Collection();
+  const { collectionsModel } = t.context;
 
-  t.false(await collectionsModel.exists(randomString()));
+  const collectionExists = collectionsModel.exists(randomString(), randomString());
+
+  t.false(await collectionExists);
 });
 
 test('Collection.delete() throws an exception if the collection has associated rules', async (t) => {
-  const name = randomString();
-  const version = randomString();
+  const { systemBucket } = suiteContext;
 
-  await manager.create({ name, version });
+  const {
+    collectionsModel,
+    collectionsToDelete,
+    rulesModel,
+    rulesToDelete
+  } = t.context;
+
+  const collection = fakeCollectionFactory();
+
+  await collectionsModel.create(collection);
+
+  collectionsToDelete.push({
+    name: collection.name,
+    version: collection.version
+  });
 
   const rule = fakeRuleFactoryV2({
     collection: {
-      name,
-      version
+      name: collection.name,
+      version: collection.version
     },
-    rule: {
-      type: 'onetime'
-    }
+    provider: undefined
   });
 
   // The workflow message template must exist in S3 before the rule can be created
   await s3().putObject({
-    Bucket: process.env.bucket,
+    Bucket: systemBucket,
     Key: `${process.env.stackName}/workflows/${rule.workflow}.json`,
     Body: JSON.stringify({})
   }).promise();
 
-  await ruleModel.create(rule);
-
-  const collectionsModel = new Collection();
+  const createdRule = await rulesModel.create(rule);
+  rulesToDelete.push(createdRule);
 
   try {
-    await collectionsModel.delete({ name, version });
+    await collectionsModel.delete({
+      name: collection.name,
+      version: collection.version
+    });
+
     t.fail('Expected an exception to be thrown');
   }
   catch (err) {
@@ -94,15 +134,15 @@ test('Collection.delete() throws an exception if the collection has associated r
 });
 
 test('Collection.delete() deletes a collection', async (t) => {
-  const name = randomString();
-  const version = randomString();
+  const { collectionsModel } = t.context;
 
-  await manager.create({ name, version });
+  const collection = fakeCollectionFactory();
 
-  t.true(await manager.exists({ name, version }));
+  await collectionsModel.create(collection);
 
-  const collectionsModel = new Collection();
-  await collectionsModel.delete({ name, version });
+  t.true(await collectionsModel.exists(collection.name, collection.version));
 
-  t.false(await manager.exists({ name, version }));
+  await collectionsModel.delete(collection);
+
+  t.false(await collectionsModel.exists(collection.name, collection.version));
 });

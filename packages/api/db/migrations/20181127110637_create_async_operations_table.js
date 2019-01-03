@@ -29,13 +29,15 @@ exports.up = async (knex) => {
     'async_operations',
     (table) => {
       table.uuid('id').primary().notNull();
-      table.timestamps(false, true);
       table.text('output').nullable();
       table.enu(
         'status',
         ['RUNNING', 'SUCCEEDED', 'RUNNER_FAILED', 'TASK_FAILED']
       ).notNull();
       table.string('task_arn').nullable();
+
+      table.bigInteger('created_at').notNullable();
+      table.bigInteger('updated_at').notNullable();
     }
   );
 

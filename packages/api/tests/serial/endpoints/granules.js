@@ -101,17 +101,20 @@ test.beforeEach(async (t) => {
   };
 
   t.context.testCollection = fakeCollectionFactory({
-    name: 'fakeCollection',
-    dataType: 'fakeCollection',
-    version: 'v1',
     duplicateHandling: 'error'
   });
   await collectionModel.create(t.context.testCollection);
 
   // create fake granule records
   t.context.fakeGranules = [
-    fakeGranuleFactoryV2({ status: 'completed' }),
-    fakeGranuleFactoryV2({ status: 'failed' })
+    fakeGranuleFactoryV2({
+      collectionId: `${t.context.testCollection.name}___${t.context.testCollection.version}`,
+      status: 'completed'
+    }),
+    fakeGranuleFactoryV2({
+      collectionId: `${t.context.testCollection.name}___${t.context.testCollection.version}`,
+      status: 'failed'
+    })
   ];
 
   await Promise.all(t.context.fakeGranules.map((granule) =>

@@ -2,22 +2,127 @@
 
 const aws = require('@cumulus/ingest/aws');
 const get = require('lodash.get');
-
 const pLimit = require('p-limit');
 
 const { constructCollectionId } = require('@cumulus/common');
-const executionSchema = require('./schemas').execution;
-const Manager = require('./base');
+
+const knex = require('../db/knex');
+const Model = require('./Model');
+const executionsGateway = require('../db/executions-gateway');
+
+const { RecordDoesNotExist } = require('../lib/errors');
 const { parseException } = require('../lib/utils');
 
+function buildExecutionModel(executionRecord) {
+  const executionModel = {
+    arn: executionRecord.arn,
+    execution: executionRecord.execution,
+    name: executionRecord.name,
+    status: executionRecord.status,
+    type: executionRecord.type
+  };
 
-class Execution extends Manager {
+  if (executionRecord.error) {
+    executionModel.error = JSON.parse(executionRecord.error);
+  }
+
+  if (executionRecord.final_payload) {
+    executionModel.finalPayload = JSON.parse(executionRecord.final_payload);
+  }
+
+  if (executionRecord.original_payload) {
+    executionModel.originalPayload = JSON.parse(executionRecord.original_payload);
+  }
+
+  return executionModel;
+}
+
+function executionModelToRecord(executionModel) {
+  const executionRecord = {
+    arn: executionModel.arn,
+    execution: executionModel.execution,
+    name: executionModel.name,
+    status: executionModel.status,
+    type: executionModel.type
+  };
+
+  if (executionModel.error) {
+    executionRecord.error = JSON.stringify(executionModel.error);
+  }
+
+  if (executionModel.finalPayload) {
+    executionRecord.final_payload = JSON.stringify(executionModel.finalPayload);
+  }
+
+  if (executionModel.originalPayload) {
+    executionRecord.original_payload = JSON.stringify(executionModel.originalPayload);
+  }
+
+  return executionRecord;
+}
+
+const privates = new WeakMap();
+
+class Execution extends Model {
   constructor() {
-    super({
-      tableName: process.env.ExecutionsTable,
-      tableHash: { name: 'arn', type: 'S' },
-      schema: executionSchema
+    super();
+
+    privates.set(this, { db: knex() });
+  }
+
+  async get({ arn }) {
+    const { db } = privates.get(this);
+
+    const executionRecord = await executionsGateway.findByArn(db, arn);
+
+    if (executionRecord === undefined) throw new RecordDoesNotExist();
+
+    return buildExecutionModel(executionRecord);
+  }
+
+  async getAll() {
+    const { db } = privates.get(this);
+
+    const executionRecords = await executionsGateway.find(db);
+
+    return executionRecords.map(buildExecutionModel);
+  }
+
+  async create(item) {
+    const { db } = privates.get(this);
+
+    const executionRecord = executionModelToRecord(item);
+
+    await executionsGateway.insert(db, executionRecord);
+
+    return this.get({ arn: item.arn });
+  }
+
+  async update({ arn }, item, keysToDelete = []) {
+    const { db } = privates.get(this);
+
+    const deletions = {};
+    keysToDelete.forEach((f) => {
+      deletions[f] = null;
     });
+
+    const updatedModel = {
+      ...item,
+      ...deletions,
+      id: undefined
+    };
+
+    const updates = executionModelToRecord(updatedModel);
+
+    await executionsGateway.update(db, arn, updates);
+
+    return this.get({ arn });
+  }
+
+  async delete({ arn }) {
+    const { db } = privates.get(this);
+
+    await executionsGateway.delete(db, arn);
   }
 
   generateDocFromPayload(payload) {
@@ -70,20 +175,19 @@ class Execution extends Manager {
     const completeMaxMs = Date.now() - (msPerDay * completeMaxDays);
     const nonCompleteMaxMs = Date.now() - (msPerDay * nonCompleteMaxDays);
     const expiryDate = completeMaxDays < nonCompleteMaxDays ? completeMaxMs : nonCompleteMaxMs;
-    const executionNames = { '#updatedAt': 'updatedAt' };
-    const executionValues = { ':expiryDate': expiryDate };
-    const filter = '#updatedAt <= :expiryDate and (attribute_exists(originalPayload) or attribute_exists(finalPayload))';
 
-    const oldExecutionRows = await this.scan({
-      names: executionNames,
-      filter: filter,
-      values: executionValues
-    });
+    const x = (await this.getAll());
+
+    const oldExecutionRows = x
+      .filter((r) => r.updatedAt <= expiryDate)
+      .filter((r) => r.originalPayload || r.finalPayload);
+
+    debugger;
 
     const concurrencyLimit = process.env.CONCURRENCY || 10;
     const limit = pLimit(concurrencyLimit);
 
-    const updatePromises = oldExecutionRows.Items.map((row) => limit(() => {
+    const updatePromises = oldExecutionRows.map((row) => limit(() => {
       if (!disableComplete && row.status === 'completed' && row.updatedAt <= completeMaxMs) {
         return this.update({ arn: row.arn }, {}, ['originalPayload', 'finalPayload']);
       }
@@ -104,11 +208,14 @@ class Execution extends Manager {
    */
   async updateExecutionFromSns(payload) {
     const doc = this.generateDocFromPayload(payload);
+
     const existingRecord = await this.get({ arn: doc.arn });
+
     doc.finalPayload = get(payload, 'payload');
     doc.originalPayload = existingRecord.originalPayload;
     doc.duration = (doc.timestamp - doc.createdAt) / 1000;
-    return this.create(doc);
+
+    return this.update({ arn: doc.arn }, doc);
   }
 
   /**
@@ -121,6 +228,7 @@ class Execution extends Manager {
     const doc = this.generateDocFromPayload(payload);
     doc.originalPayload = get(payload, 'payload');
     doc.duration = (doc.timestamp - doc.createdAt) / 1000;
+
     return this.create(doc);
   }
 }

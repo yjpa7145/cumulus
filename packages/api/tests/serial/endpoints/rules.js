@@ -1,7 +1,6 @@
 'use strict';
 
 const test = require('ava');
-const cloneDeep = require('lodash.clonedeep');
 const aws = require('@cumulus/common/aws');
 const { randomString } = require('@cumulus/common/test-utils');
 const bootstrap = require('../../../lambdas/bootstrap');
@@ -13,6 +12,11 @@ const {
 } = require('../../../lib/testUtils');
 const { Search } = require('../../../es/search');
 const assertions = require('../../../lib/assertions');
+const {
+  fakeCollectionFactory,
+  fakeProviderFactory,
+  fakeRuleFactoryV2
+} = require('../../../lib/testUtils');
 
 const esIndex = randomString();
 
@@ -23,53 +27,61 @@ process.env.stackName = randomString();
 process.env.bucket = randomString();
 process.env.TOKEN_SECRET = randomString();
 
-const workflowName = randomString();
-const workflowfile = `${process.env.stackName}/workflows/${workflowName}.json`;
-
-const testRule = {
-  name: 'make_coffee',
-  workflow: workflowName,
-  provider: 'whole-foods',
-  collection: {
-    name: 'compass',
-    version: '0.0.0'
-  },
-  rule: {
-    type: 'onetime'
-  },
-  state: 'DISABLED'
-};
-
 let accessTokenModel;
 let authHeaders;
+let collectionModel;
+let providerModel;
 let ruleModel;
 let userModel;
 
 test.before(async () => {
+  process.env.internal = process.env.bucket;
+
+  accessTokenModel = new models.AccessToken();
+  collectionModel = new models.Collection();
+  providerModel = new models.Provider();
+  ruleModel = new models.Rule();
+  userModel = new models.User();
+
   await bootstrap.bootstrapElasticSearch('fakehost', esIndex);
 
   await aws.s3().createBucket({ Bucket: process.env.bucket }).promise();
+
+  await accessTokenModel.createTable();
+  await userModel.createTable();
+
+  const jwtAuthToken = await createFakeJwtAuthToken({ accessTokenModel, userModel });
+  authHeaders = {
+    Authorization: `Bearer ${jwtAuthToken}`
+  };
+});
+
+test.beforeEach(async (t) => {
+  const workflowName = randomString();
+  const workflowfile = `${process.env.stackName}/workflows/${workflowName}.json`;
+
   await aws.s3().putObject({
     Bucket: process.env.bucket,
     Key: workflowfile,
     Body: 'test data'
   }).promise();
 
-  ruleModel = new models.Rule();
-  await ruleModel.createTable();
+  const provider = fakeProviderFactory();
+  await providerModel.create(provider);
 
-  await ruleModel.create(testRule);
+  const collection = fakeCollectionFactory();
+  await collectionModel.create(collection);
 
-  userModel = new models.User();
-  await userModel.createTable();
+  t.context.testRule = fakeRuleFactoryV2({
+    collection: {
+      name: collection.name,
+      version: collection.version
+    },
+    provider: provider.id,
+    workflow: workflowName
+  });
 
-  accessTokenModel = new models.AccessToken();
-  await accessTokenModel.createTable();
-
-  const jwtAuthToken = await createFakeJwtAuthToken({ accessTokenModel, userModel });
-  authHeaders = {
-    Authorization: `Bearer ${jwtAuthToken}`
-  };
+  await ruleModel.create(t.context.testRule);
 });
 
 test.after.always(async () => {
@@ -248,6 +260,8 @@ test('default returns list of rules', (t) => {
 });
 
 test('GET gets a rule', (t) => {
+  const { testRule } = t.context;
+
   const getEvent = {
     pathParameters: {
       name: testRule.name
@@ -263,7 +277,13 @@ test('GET gets a rule', (t) => {
 });
 
 test('When calling the API endpoint to delete an existing rule it does not return the deleted rule', async (t) => {
-  const newRule = Object.assign({}, testRule, { name: 'pop_culture_reference' });
+  const { testRule } = t.context;
+
+  const newRule = {
+    ...testRule,
+    name: randomString()
+  };
+
   const postEvent = {
     httpMethod: 'POST',
     body: JSON.stringify(newRule),
@@ -291,7 +311,13 @@ test('When calling the API endpoint to delete an existing rule it does not retur
 });
 
 test('403 error when calling the API endpoint to delete an existing rule without an invalid access token', async (t) => {
-  const newRule = Object.assign({}, testRule, { name: 'side_step_left' });
+  const { testRule } = t.context;
+
+  const newRule = {
+    ...testRule,
+    name: randomString()
+  };
+
   const postEvent = {
     httpMethod: 'POST',
     body: JSON.stringify(newRule),
@@ -300,6 +326,9 @@ test('403 error when calling the API endpoint to delete an existing rule without
 
   await testEndpoint(rulesEndpoint, postEvent, (response) => {
     const { message, record } = JSON.parse(response.body);
+
+    console.log('response.body:', JSON.stringify(response.body, null, 2));
+
     t.is(message, 'Record saved');
     newRule.createdAt = record.createdAt;
     newRule.updatedAt = record.updatedAt;
@@ -332,7 +361,13 @@ test('403 error when calling the API endpoint to delete an existing rule without
 });
 
 test('POST creates a rule', (t) => {
-  const newRule = Object.assign(cloneDeep(testRule), { name: 'make_waffles' });
+  const { testRule } = t.context;
+
+  const newRule = {
+    ...testRule,
+    name: randomString()
+  };
+
   const postEvent = {
     httpMethod: 'POST',
     body: JSON.stringify(newRule),
@@ -351,7 +386,10 @@ test('POST creates a rule', (t) => {
 });
 
 test('POST returns a record exists when one exists', (t) => {
-  const newRule = Object.assign({}, testRule);
+  const { testRule } = t.context;
+
+  const newRule = { ...testRule };
+
   const postEvent = {
     httpMethod: 'POST',
     body: JSON.stringify(newRule),
@@ -366,7 +404,12 @@ test('POST returns a record exists when one exists', (t) => {
 });
 
 test('PUT updates a rule', (t) => {
-  const newRule = Object.assign({}, testRule, { state: 'ENABLED' });
+  const { testRule } = t.context;
+
+  const newRule = {
+    ...testRule,
+    state: 'ENABLED'
+  };
 
   const updateEvent = {
     body: JSON.stringify({ state: 'ENABLED' }),
@@ -404,6 +447,8 @@ test('PUT returns "record does not exist"', (t) => {
 });
 
 test('DELETE deletes a rule', (t) => {
+  const { testRule } = t.context;
+
   const deleteEvent = {
     pathParameters: {
       name: testRule.name

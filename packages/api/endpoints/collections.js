@@ -89,7 +89,7 @@ function put(event, cb) {
   const pname = event.pathParameters.collectionName;
   const pversion = event.pathParameters.version;
 
-  let data = event.body
+  const data = event.body
     ? JSON.parse(event.body)
     : {};
 
@@ -102,12 +102,7 @@ function put(event, cb) {
 
   const c = new models.Collection();
 
-  // get the record first
-  return c.get({ name, version })
-    .then((originalData) => {
-      data = Object.assign({}, originalData, data);
-      return c.create(data);
-    })
+  return c.update({ name, version }, data)
     .then(() => cb(null, data))
     .catch((err) => {
       if (err instanceof RecordDoesNotExist) {

@@ -1,7 +1,10 @@
 'use strict';
 
-const { s3 } = require('./aws');
-
+const {
+  deleteS3Object,
+  getS3Object,
+  putS3Object
+} = require('./aws');
 
 /**
  * Returns the collectionId used in elasticsearch
@@ -46,10 +49,7 @@ class CollectionConfigStore {
       let response;
       try {
         // Attempt to fetch the collection config from S3
-        response = await s3().getObject({
-          Bucket: this.bucket,
-          Key: this.configKey(collectionId)
-        }).promise();
+        response = await getS3Object(this.bucket, this.configKey(collectionId));
       }
       catch (err) {
         if (err.code === 'NoSuchKey') {
@@ -76,7 +76,7 @@ class CollectionConfigStore {
    * @param {string} dataType - the name of the collection config to store
    * @param {string} dataVersion - version of Collection
    * @param {Object} config - the collection config to store
-   * @returns {Promise<null>} resolves when the collection config has been written
+   * @returns {Promise<undefined>} resolves when the collection config has been written
    *   to S3
    */
   async put(dataType, dataVersion, config) {
@@ -84,11 +84,11 @@ class CollectionConfigStore {
 
     this.cache[collectionId] = config;
 
-    return s3().putObject({
+    await putS3Object({
       Bucket: this.bucket,
       Key: this.configKey(collectionId),
       Body: JSON.stringify(config)
-    }).promise().then(() => null); // Don't leak implementation details to the caller
+    });
   }
 
   /**
@@ -102,10 +102,7 @@ class CollectionConfigStore {
   async delete(dataType, dataVersion) {
     const collectionId = constructCollectionId(dataType, dataVersion);
 
-    await s3().deleteObject({
-      Bucket: this.bucket,
-      Key: this.configKey(collectionId)
-    }).promise();
+    await deleteS3Object(this.bucket, this.configKey(collectionId));
 
     delete this.cache[collectionId];
   }

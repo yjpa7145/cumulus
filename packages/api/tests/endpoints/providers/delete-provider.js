@@ -9,6 +9,7 @@ const models = require('../../../models');
 const providerEndpoint = require('../../../endpoints/providers');
 const {
   createFakeJwtAuthToken,
+  fakeCollectionFactory,
   fakeProviderFactory,
   testEndpoint
 } = require('../../../lib/testUtils');
@@ -30,9 +31,12 @@ let authHeaders;
 let accessTokenModel;
 let ruleModel;
 let userModel;
+let collectionsModel;
 
 test.before(async () => {
   await bootstrap.bootstrapElasticSearch('fakehost', esIndex);
+
+  collectionsModel = new models.Collection();
 
   providerModel = new models.Provider();
   await providerModel.createTable();
@@ -56,6 +60,7 @@ test.before(async () => {
   await ruleModel.createTable();
 
   process.env.bucket = randomString();
+  process.env.internal = process.env.bucket;
   await s3().createBucket({ Bucket: process.env.bucket }).promise();
 
   process.env.stackName = randomString();
@@ -125,10 +130,17 @@ test('Deleting a provider removes the provider', (t) => {
 test('Attempting to delete a provider with an associated rule returns a 409 response', async (t) => {
   const { testProvider } = t.context;
 
+  const collection = fakeCollectionFactory();
+  await collectionsModel.create(collection);
+
   const rule = fakeRuleFactoryV2({
     provider: testProvider.id,
     rule: {
       type: 'onetime'
+    },
+    collection: {
+      name: collection.name,
+      version: collection.version
     }
   });
 
@@ -158,10 +170,17 @@ test('Attempting to delete a provider with an associated rule returns a 409 resp
 test('Attempting to delete a provider with an associated rule does not delete the provider', async (t) => {
   const { testProvider } = t.context;
 
+  const collection = fakeCollectionFactory();
+  await collectionsModel.create(collection);
+
   const rule = fakeRuleFactoryV2({
     provider: testProvider.id,
     rule: {
       type: 'onetime'
+    },
+    collection: {
+      name: collection.name,
+      version: collection.version
     }
   });
 

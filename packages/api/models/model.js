@@ -1,13 +1,6 @@
 'use strict';
 
 const Ajv = require('ajv');
-const Registry = require('../lib/Registry');
-const camelCase = require('lodash.camelcase');
-const mapKeys = require('lodash.mapkeys');
-const snakeCase = require('lodash.snakecase');
-
-
-
 
 class Model {
   static recordIsValid(item, schema = null, removeAdditional = false) {
@@ -30,6 +23,14 @@ class Model {
 
   // Void function to prevent upstream tests from failing when they attempt to
   // clean up
+  static createTable() {}
+
+  // Void function to prevent upstream tests from failing when they attempt to
+  // clean up
+  static deleteTable() {}
+
+  // Void function to prevent upstream tests from failing when they attempt to
+  // clean up
   async createTable() {} // eslint-disable-line no-empty-function
 
   async deleteTable() {} // eslint-disable-line no-empty-function
@@ -46,34 +47,16 @@ class Model {
     throw new Error('Deprecated');
   }
 
-
-  /**
-   * Get a knex table object for the 'providers' table
-   * @returns {Object} knex table object
-   */
-  table() {
-    return Registry.knex()(this.tableName);
+  scan() {
+    throw new Error('Deprecated');
   }
 
-  /**
-   * Translates database object keys (columms) from camel-case to downcase/underscore seperated
-   * column/Object names
-   * @param {Object} item database object
-   * @returns { Object } Provider database object with keys translated
-   */
-  translateItemToSnakeCase(item) {
-    return mapKeys(item, (value, key) => snakeCase(key));
+  updateStatus() {
+    throw new Error('Deprecated');
   }
 
-  /**
-   * Translates database object keys (columns) from downcase/underscore seperated
-   * column/Object names to camelCase.
-   * @param { Object } item database object
-   * @returns { Object }  database object with keys translated
-   */
-  translateItemToCamelCase(item) {
-    return mapKeys(item, (value, key) => camelCase(key));
+  hasFailed() {
+    throw new Error('Deprecated');
   }
 }
-
 module.exports = Model;

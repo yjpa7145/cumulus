@@ -9,9 +9,10 @@ const models = require('../../../models');
 const bootstrap = require('../../../lambdas/bootstrap');
 const collectionsEndpoint = require('../../../endpoints/collections');
 const {
+  createFakeJwtAuthToken,
   fakeCollectionFactory,
-  testEndpoint,
-  createFakeJwtAuthToken
+  fakeProviderFactory,
+  testEndpoint
 } = require('../../../lib/testUtils');
 const { Search } = require('../../../es/search');
 const assertions = require('../../../lib/assertions');
@@ -30,6 +31,7 @@ let esClient;
 let authHeaders;
 let accessTokenModel;
 let collectionModel;
+let providersModel;
 let ruleModel;
 let userModel;
 
@@ -39,6 +41,8 @@ test.before(async () => {
 
   collectionModel = new models.Collection({ tableName: process.env.CollectionsTable });
   await collectionModel.createTable();
+
+  providersModel = new models.Provider();
 
   // create fake Users table
   userModel = new models.User();
@@ -155,11 +159,15 @@ test('Attempting to delete a collection with an associated rule returns a 409 re
   const collection = fakeCollectionFactory();
   await collectionModel.create(collection);
 
+  const provider = fakeProviderFactory();
+  await providersModel.create(provider);
+
   const rule = fakeRuleFactoryV2({
     collection: {
       name: collection.name,
       version: collection.version
     },
+    provider: provider.id,
     rule: {
       type: 'onetime'
     }
@@ -202,7 +210,8 @@ test('Attempting to delete a collection with an associated rule does not delete 
     },
     rule: {
       type: 'onetime'
-    }
+    },
+    provider: undefined
   });
 
   // The workflow message template must exist in S3 before the rule can be created

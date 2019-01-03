@@ -19,23 +19,14 @@ const { queueMessageForRule } = require('../lib/rulesHelpers');
  */
 async function getKinesisRules(collection) {
   const model = new Rule();
-  const kinesisRules = await model.scan({
-    names: {
-      '#col': 'collection',
-      '#nm': 'name',
-      '#st': 'state',
-      '#rl': 'rule',
-      '#tp': 'type'
-    },
-    filter: '#st = :enabledState AND #col.#nm = :collectionName AND #rl.#tp = :ruleType',
-    values: {
-      ':enabledState': 'ENABLED',
-      ':collectionName': collection,
-      ':ruleType': 'kinesis'
-    }
-  });
 
-  return kinesisRules.Items;
+  // TODO Update getAll to add db-side filtering
+  const kinesisRules = (await model.getAll())
+    .filter((r) => r.state === 'ENABLED')
+    .filter((r) => r.collection.name === collection)
+    .filter((r) => r.rule.type === 'kinesis');
+
+  return kinesisRules;
 }
 
 /**
@@ -47,22 +38,14 @@ async function getKinesisRules(collection) {
  */
 async function getSnsRules(topicArn) {
   const model = new Rule();
-  const snsRules = await model.scan({
-    names: {
-      '#st': 'state',
-      '#rl': 'rule',
-      '#tp': 'type',
-      '#vl': 'value'
-    },
-    filter: '#st = :enabledState AND #rl.#tp = :ruleType AND #rl.#vl = :ruleValue',
-    values: {
-      ':enabledState': 'ENABLED',
-      ':ruleType': 'sns',
-      ':ruleValue': topicArn
-    }
-  });
 
-  return snsRules.Items;
+  // TODO Update getAll to add db-side filtering
+  const snsRules = (await model.getAll())
+    .filter((r) => r.state === 'ENABLED')
+    .filter((r) => r.rule.type === 'sns')
+    .filter((r) => r.rule.value === topicArn);
+
+  return snsRules;
 }
 
 async function getRules(param, originalMessageSource) {
@@ -90,6 +73,7 @@ function validateMessage(event, originalMessageSource, messageSchema) {
 
   const ajv = new Ajv({ allErrors: true });
   const validate = ajv.compile(messageSchema);
+
   return validate(event);
 }
 
@@ -164,7 +148,7 @@ function handleProcessRecordError(error, record, fromSNS, isKinesisRetry) {
  * @returns {[Promises]} Array of promises. Each promise is resolved when a
  * message is queued for all associated kinesis rules.
  */
-function processRecord(record, fromSNS) {
+async function processRecord(record, fromSNS) {
   let eventObject;
   let isKinesisRetry = false;
   let parsed;
@@ -202,24 +186,27 @@ function processRecord(record, fromSNS) {
     catch (err) {
       log.error('Caught error parsing JSON:');
       log.error(err);
+
       if (fromSNS) {
         return handleProcessRecordError(err, record, isKinesisRetry, fromSNS);
       }
     }
   }
 
-  return validateMessage(eventObject, originalMessageSource, validationSchema)
-    .then(() => getRules(ruleParam, originalMessageSource))
-    .then((rules) => (
-      Promise.all(rules.map((rule) => {
-        if (originalMessageSource === 'sns') set(rule, 'meta.snsSourceArn', ruleParam);
-        return queueMessageForRule(rule, eventObject);
-      }))))
-    .catch((err) => {
-      log.error('Caught error in processRecord:');
-      log.error(err);
-      return handleProcessRecordError(err, record, isKinesisRetry, fromSNS);
-    });
+  try {
+    await validateMessage(eventObject, originalMessageSource, validationSchema);
+    const rules = await getRules(ruleParam, originalMessageSource);
+
+    Promise.all(rules.map((rule) => {
+      if (originalMessageSource === 'sns') set(rule, 'meta.snsSourceArn', ruleParam);
+      return queueMessageForRule(rule, eventObject);
+    }));
+  }
+  catch (err) {
+    log.error('Caught error in processRecord:');
+    log.error(err);
+    return handleProcessRecordError(err, record, isKinesisRetry, fromSNS);
+  }
 }
 
 /**

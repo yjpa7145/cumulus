@@ -196,20 +196,18 @@ function fakeUserFactory(params = {}) {
  * @returns {Object} fake collection object
  */
 function fakeCollectionFactory(options = {}) {
-  return Object.assign(
-    {
-      name: randomString(),
-      dataType: randomString(),
-      version: '0.0.0',
-      provider_path: '/',
-      duplicateHandling: 'replace',
-      granuleId: '^MOD09GQ\\.A[\\d]{7}\\.[\\S]{6}\\.006\\.[\\d]{13}$',
-      granuleIdExtraction: '(MOD09GQ\\.(.*))\\.hdf',
-      sampleFileName: 'MOD09GQ.A2017025.h21v00.006.2017034065104.hdf',
-      files: []
-    },
-    options
-  );
+  return {
+    name: randomString(),
+    dataType: randomString(),
+    version: '0.0.0',
+    provider_path: '/',
+    duplicateHandling: 'replace',
+    granuleId: '^MOD09GQ\\.A[\\d]{7}\\.[\\S]{6}\\.006\\.[\\d]{13}$',
+    granuleIdExtraction: '(MOD09GQ\\.(.*))\\.hdf',
+    sampleFileName: 'MOD09GQ.A2017025.h21v00.006.2017034065104.hdf',
+    files: [],
+    ...options
+  };
 }
 
 /**
@@ -222,7 +220,7 @@ function fakeProviderFactory(options = {}) {
   return Object.assign(
     {
       id: randomString(),
-      global_connection_limit: 1,
+      globalConnectionLimit: 1,
       protocol: 'http',
       host: randomString(),
       port: 80

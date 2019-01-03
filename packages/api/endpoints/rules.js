@@ -94,7 +94,7 @@ async function put(event, cb) {
 
   return model.update(originalData, data)
     .then((d) => cb(null, d))
-    .catch((err) => cb(err));
+    .catch(cb);
 }
 
 /**

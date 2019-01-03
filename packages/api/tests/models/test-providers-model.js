@@ -1,53 +1,64 @@
 'use strict';
 
 const test = require('ava');
-const { recursivelyDeleteS3Bucket, s3 } = require('@cumulus/common/aws');
+const {
+  createS3Bucket,
+  putS3Object,
+  recursivelyDeleteS3Bucket
+} = require('@cumulus/common/aws');
 const { randomString } = require('@cumulus/common/test-utils');
 const sinon = require('sinon');
-const { fakeProviderFactory } = require('../../lib/testUtils.js');
+const { fakeCollectionFactory, fakeProviderFactory } = require('../../lib/testUtils.js');
 const { fakeRuleFactoryV2 } = require('../../lib/testUtils');
-const { Provider, Rule } = require('../../models');
+const { Collection, Provider, Rule } = require('../../models');
 const { AssociatedRulesError } = require('../../lib/errors');
 const { RecordDoesNotExist } = require('../../lib/errors');
-const Registry = require('../../lib/Registry');
+const providersGateway = require('../../db/providers-gateway');
+const knex = require('../../db/knex');
 
-
-let ruleModel;
+const suiteContext = {};
 
 test.before(async () => {
-  process.env.RulesTable = randomString();
-  ruleModel = new Rule();
-  await ruleModel.createTable();
+  suiteContext.db = knex();
+
+  suiteContext.collectionsModel = new Collection();
+  suiteContext.rulesModel = new Rule();
 
   process.env.bucket = randomString();
-  await s3().createBucket({ Bucket: process.env.bucket }).promise();
+  process.env.internal = process.env.bucket;
+  await createS3Bucket({ Bucket: process.env.bucket });
+
   process.env.stackName = randomString();
 });
 
 test.beforeEach(async (t) => {
-  t.context.table = Registry.knex()(Provider.tableName);
+  t.context.providersModel = new Provider();
   t.context.provider = fakeProviderFactory();
 });
 
 test.after.always(async () => {
-  await ruleModel.deleteTable();
+  await suiteContext.rulesModel.deleteTable();
   await recursivelyDeleteS3Bucket(process.env.bucket);
 });
 
 test('get() returns a translated row', async (t) => {
-  const id = t.context.provider.id;
-  t.context.provider.global_connection_limit = 10;
-  await t.context.table.insert(t.context.provider);
+  const { provider, providersModel } = t.context;
 
-  const providersModel = new Provider();
-  const actual = (await providersModel.get({ id }));
-  t.is(t.context.provider.id, actual.id);
-  t.is(t.context.provider.global_connection_limit, actual.globalConnectionLimit);
+  await providersModel.create({
+    ...provider,
+    globalConnectionLimit: 10
+  });
+
+  const actual = (await providersModel.get({ id: provider.id }));
+
+  t.is(actual.id, provider.id);
+  t.is(actual.globalConnectionLimit, 10);
 });
 
 test('get() throws an exception if no record is found', async (t) => {
+  const { providersModel } = t.context;
+
   const id = t.context.provider.id;
-  const providersModel = new Provider();
   let actual;
   try {
     await providersModel.get({ id });
@@ -59,40 +70,54 @@ test('get() throws an exception if no record is found', async (t) => {
 });
 
 test('exists() returns true when a record exists', async (t) => {
-  await t.context.table.insert(t.context.provider);
-  const providersModel = new Provider();
+  const { providersModel } = t.context;
+
+  await providersModel.create(t.context.provider);
+
   t.true(await providersModel.exists(t.context.provider.id));
 });
 
 test('exists() returns false when a record does not exist', async (t) => {
-  const providersModel = new Provider();
+  const { providersModel } = t.context;
+
   t.false(await providersModel.exists(randomString()));
 });
 
 test('delete() throws an exception if the provider has associated rules', async (t) => {
-  const id = t.context.provider.id;
-  const providersModel = new Provider();
+  const {
+    collectionsModel,
+    rulesModel
+  } = suiteContext;
 
+  const { provider, providersModel } = t.context;
 
-  await t.context.table.insert(t.context.provider);
+  const collection = fakeCollectionFactory();
+  await collectionsModel.create(collection);
+
+  await providersModel.create(provider);
+
   const rule = fakeRuleFactoryV2({
-    provider: id,
+    collection: {
+      name: collection.name,
+      version: collection.version
+    },
+    provider: provider.id,
     rule: {
       type: 'onetime'
     }
   });
 
   // The workflow message template must exist in S3 before the rule can be created
-  await s3().putObject({
+  await putS3Object({
     Bucket: process.env.bucket,
     Key: `${process.env.stackName}/workflows/${rule.workflow}.json`,
     Body: JSON.stringify({})
-  }).promise();
+  });
 
-  await ruleModel.create(rule);
+  await rulesModel.create(rule);
 
   try {
-    await providersModel.delete({ id });
+    await providersModel.delete({ id: provider.id });
     t.fail('Expected an exception to be thrown');
   }
   catch (err) {
@@ -103,18 +128,21 @@ test('delete() throws an exception if the provider has associated rules', async 
 });
 
 test('delete() deletes a provider', async (t) => {
+  const { providersModel } = t.context;
+
   const id = t.context.provider.id;
-  const providersModel = new Provider();
-  await t.context.table.insert(t.context.provider);
+
+  await providersModel.create(t.context.provider);
 
   await providersModel.delete({ id });
 
   t.false(await providersModel.exists({ id }));
 });
 
-test('insert() inserts a translated provider', async (t) => {
-  const provider = t.context.provider;
-  const providersModel = new Provider();
+test('create() inserts a translated provider', async (t) => {
+  const { db } = suiteContext;
+  const { provider, providersModel } = t.context;
+
   const encryptStub = sinon.stub(providersModel, 'encrypt');
   encryptStub.returns(Promise.resolve('encryptedValue'));
 
@@ -125,9 +153,10 @@ test('insert() inserts a translated provider', async (t) => {
   };
   Object.assign(provider, updateValues);
 
-  await providersModel.insert(provider);
+  await providersModel.create(provider);
 
-  const actual = { ...(await t.context.table.select().where({ id: provider.id }))[0] };
+  const actual = { ...(await providersGateway.findById(db, provider.id)) };
+
   const expected = {
     id: provider.id,
     global_connection_limit: 10,
@@ -141,15 +170,18 @@ test('insert() inserts a translated provider', async (t) => {
     username: 'encryptedValue',
     encrypted: true
   };
+
   t.deepEqual(actual, expected);
 });
 
 test('update() updates a record', async (t) => {
+  const { providersModel } = t.context;
+
   const id = t.context.provider.id;
-  const providersModel = new Provider();
+
   const updateRecord = { host: 'test_host' };
 
-  await t.context.table.insert(t.context.provider);
+  await providersModel.create(t.context.provider);
   await providersModel.update({ id }, updateRecord);
 
   const actual = (await providersModel.get({ id }));

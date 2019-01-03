@@ -186,8 +186,21 @@ exports.s3TagSetToQueryString = (tagset) => tagset.reduce((acc, tag) => acc.conc
  * @param {string} key - key of the object to be deleted
  * @returns {Promise} - promise of the object being deleted
  */
-exports.deleteS3Object = (bucket, key) =>
-  exports.s3().deleteObject({ Bucket: bucket, Key: key }).promise();
+exports.deleteS3Object = async (bucket, key) => {
+  const params = {
+    Bucket: bucket,
+    Key: key
+  };
+
+  try {
+    return await exports.s3().deleteObject(params).promise();
+  }
+  catch (err) {
+    const betterError = new Error(`Failed to delete S3 object: ${err.message}`);
+    betterError.requestParams = params;
+    throw betterError;
+  }
+};
 
 /**
  * Test if an object exists in S3
@@ -210,10 +223,19 @@ exports.s3ObjectExists = (params) =>
 * @param {Object} params - same params as https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putObject-property
 * @returns {Promise} - promise of the object being put
 **/
-exports.s3PutObject = (params) => {
+exports.s3PutObject = async (params) => {
   if (!params.ACL) params.ACL = 'private'; //eslint-disable-line no-param-reassign
-  return exports.s3().putObject(params).promise();
+
+  try {
+    return await exports.s3().putObject(params).promise();
+  }
+  catch (err) {
+    const betterError = new Error(`Failed to put S3 object: ${err.message}`);
+    betterError.requestParams = params;
+    throw betterError;
+  }
 };
+exports.putS3Object = exports.s3PutObject; // alias
 
 /**
 * Copy an object from one location on S3 to another
@@ -286,8 +308,17 @@ exports.s3GetObjectTagging = (bucket, key) =>
 * @param {string} key - key for object (filepath + filename)
 * @returns {Promise} - returns response from `S3.getObject` as a promise
 **/
-exports.getS3Object = (bucket, key) =>
-  exports.s3().getObject({ Bucket: bucket, Key: key }).promise();
+exports.getS3Object = async (bucket, key) => {
+  const params = { Bucket: bucket, Key: key };
+  try {
+    return await exports.s3().getObject(params).promise();
+  }
+  catch (err) {
+    const betterError = new Error(`Failed to get S3 object: ${err.message}`);
+    betterError.requestParams = params;
+    throw betterError;
+  }
+};
 
 /**
 * Check if a file exists in an S3 object
@@ -863,4 +894,15 @@ exports.pullStepFunctionEvent = async (event) => {
     return JSON.parse(file.Body.toString());
   }
   return event;
+};
+
+exports.createS3Bucket = async (params) => {
+  try {
+    return await exports.s3().createBucket(params).promise();
+  }
+  catch (err) {
+    const betterError = new Error(`Failed to create S3 bucket: ${err.message}`);
+    betterError.requestParams = params;
+    throw betterError;
+  }
 };

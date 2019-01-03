@@ -21,8 +21,8 @@ exports.up = async (knex) => {
     (table) => {
       table.string('id').primary().notNull();
 
-      table.datetime('created_at', 3).defaultTo(knex.fn.now(3));
-      table.datetime('updated_at', 3).defaultTo(knex.fn.now(3));
+      table.bigInteger('created_at').notNullable();
+      table.bigInteger('updated_at').notNullable();
 
       table.integer('global_connection_limit').notNull();
       table.text('host').notNull();

@@ -100,6 +100,7 @@ test.serial('PUT updates an existing provider and returns it in listing', (t) =>
   const updateParams = {
     globalConnectionLimit: t.context.testProvider.globalConnectionLimit + 1
   };
+
   const updateEvent = {
     pathParameters: { id: t.context.testProvider.id },
     body: JSON.stringify(updateParams),

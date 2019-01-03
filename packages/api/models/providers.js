@@ -1,23 +1,35 @@
 'use strict';
 
+const camelCase = require('lodash.camelcase');
 const cloneDeep = require('lodash.clonedeep');
-const Crypto = require('@cumulus/ingest/crypto').DefaultProvider;
+const mapKeys = require('lodash.mapkeys');
+const snakeCase = require('lodash.snakecase');
+
+const { DefaultProvider: Crypto } = require('@cumulus/ingest/crypto');
+
+const knex = require('../db/knex');
+const Model = require('./Model');
+const providersGateway = require('../db/providers-gateway');
+const rulesGateway = require('../db/rules-gateway');
 
 const { AssociatedRulesError } = require('../lib/errors');
-const Model = require('./model');
-const Rule = require('./rules');
 const { RecordDoesNotExist } = require('../lib/errors');
-const { ProviderSchema } = require('./schemas').provider;
+
+function providerModelToRecord(providerModel) {
+  return mapKeys(providerModel, (_, key) => snakeCase(key));
+}
+
+function buildProviderModel(providerRecord) {
+  return mapKeys(providerRecord, (_, key) => camelCase(key));
+}
+
+const privates = new WeakMap();
 
 class Provider extends Model {
-  /**
-   * Creates an instance of Provider
-   */
   constructor() {
     super();
-    this.tableName = Provider.tableName;
-    this.removeAdditional = 'all';
-    this.schema = ProviderSchema;
+
+    privates.set(this, { db: knex() });
   }
 
   /**
@@ -26,17 +38,15 @@ class Provider extends Model {
    * @param {string} item Provider item
    * @returns {Object} provider object
    */
-  async get(item) {
-    const result = await this.table()
-      .first()
-      .where({ id: item.id });
+  async get({ id }) {
+    const { db } = privates.get(this);
 
-    if (!result) {
-      throw new RecordDoesNotExist(`No record found for ${JSON.stringify(item)}`);
-    }
-    return this.translateItemToCamelCase(result);
+    const providerRecord = await providersGateway.findById(db, id);
+
+    if (providerRecord === undefined) throw new RecordDoesNotExist();
+
+    return buildProviderModel(providerRecord);
   }
-
 
   /**
    * Check if a given provider exists
@@ -45,16 +55,80 @@ class Provider extends Model {
    * @returns {boolean}
    */
   async exists(id) {
-    try {
-      await this.get({ id });
-      return true;
+    const { db } = privates.get(this);
+
+    const providerRecord = await providersGateway.findById(db, id);
+
+    return providerRecord !== undefined;
+  }
+
+  /**
+   * Insert new row into database.  Alias for 'insert' function.
+   *
+   * @param {Object} item provider 'object' representing a row to create
+   * @returns {Object} the the full item added with modifications made by the model
+   */
+  async create(item) {
+    const { db } = privates.get(this);
+
+    const encryptedModel = await this.encryptItem(item);
+
+    const providerRecord = providerModelToRecord(encryptedModel);
+
+    await providersGateway.insert(db, providerRecord);
+
+    return this.get({ id: item.id });
+  }
+
+  /**
+   * Updates a provider
+   *
+   * @param { Object } keyObject { id: key } object
+   * @param { Object } item an object with key/value pairs to update
+   * @param { Array<string> } [keysToDelete=[]] array of keys to set to null.
+   * @returns { string } id updated Provider id
+   **/
+  async update(keyObject, item, keysToDelete = []) {
+    const { db } = privates.get(this);
+
+    const deletions = {};
+    keysToDelete.forEach((f) => {
+      deletions[f] = null;
+    });
+
+    const updatedModel = {
+      ...item,
+      ...deletions,
+      id: undefined
+    };
+
+    const encryptedModel = await this.encryptItem(updatedModel);
+
+    const updates = providerModelToRecord(encryptedModel);
+
+    await providersGateway.update(db, keyObject.id, updates);
+
+    return this.get({ id: keyObject.id });
+  }
+
+  /**
+   * Delete a provider
+   *
+   * @param { Object } item  Provider item to delete, uses ID field to identify row to remove.
+   */
+  async delete({ id }) {
+    const { db } = privates.get(this);
+
+    const rules = await rulesGateway.findByProviderId(db, id);
+
+    if (rules.length > 0) {
+      throw new AssociatedRulesError(
+        'Cannot delete a provider that has associated rules',
+        rules.map((r) => r.name)
+      );
     }
-    catch (error) {
-      if (error instanceof RecordDoesNotExist) {
-        return false;
-      }
-      throw error;
-    }
+
+    await providersGateway.delete(db, id);
   }
 
   encrypt(value) {
@@ -80,99 +154,5 @@ class Provider extends Model {
 
     return encryptedItem;
   }
-
-  /**
-   * Updates a provider
-   *
-   * @param { Object } keyObject { id: key } object
-   * @param { Object } item an object with key/value pairs to update
-   * @param { Array<string> } [keysToDelete=[]] array of keys to set to null.
-   * @returns { string } id updated Provider id
-   **/
-  async update(keyObject, item, keysToDelete = []) {
-    const updatedItem = cloneDeep(item);
-
-    keysToDelete.forEach((key) => {
-      updatedItem[key] = null;
-    });
-
-    // encrypt the password
-    const encryptedItem = await this.encryptItem(updatedItem);
-
-    await this.table()
-      .where({ id: keyObject.id })
-      .update(this.translateItemToSnakeCase(encryptedItem));
-
-    return this.get(keyObject);
-  }
-
-  /**
-   * Insert new row into database.  Alias for 'insert' function.
-   *
-   * @param {Object} item provider 'object' representing a row to create
-   * @returns {Object} the the full item added with modifications made by the model
-   */
-  create(item) {
-    return this.insert(item);
-  }
-
-  /**
-   * Insert new row into the database
-   *
-   * @param {Object} item provider 'object' representing a row to create
-\   * @returns {Object} the the full item added with modifications made by the model
-   */
-  async insert(item) {
-    const insertItem = cloneDeep(item);
-
-    // encrypt the password
-    const encryptedItem = await this.encryptItem(insertItem);
-
-    await this.table()
-      .insert(this.translateItemToSnakeCase(encryptedItem));
-
-    return this.get({ id: insertItem.id });
-  }
-
-  /**
-   * Delete a provider
-   *
-   * @param { Object } item  Provider item to delete, uses ID field to identify row to remove.
-   */
-  async delete(item) {
-    const associatedRuleNames = (await this.getAssociatedRules(item.id))
-      .map((rule) => rule.name);
-
-    if (associatedRuleNames.length > 0) {
-      throw new AssociatedRulesError(
-        'Cannot delete a provider that has associated rules',
-        associatedRuleNames
-      );
-    }
-    await this.table()
-      .where({ id: item.id })
-      .del();
-  }
-
-
-  /**
-   * Get any rules associated with the provider
-   *
-   * @param {string} id - the provider id
-   * @returns {Promise<boolean>}
-   */
-  async getAssociatedRules(id) {
-    const ruleModel = new Rule();
-
-    const scanResult = await ruleModel.scan({
-      filter: 'provider = :provider',
-      values: { ':provider': id }
-    });
-
-    return scanResult.Items;
-  }
 }
-
-Provider.tableName = 'providers';
-
 module.exports = Provider;
