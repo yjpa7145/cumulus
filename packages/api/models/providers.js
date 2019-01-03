@@ -5,7 +5,7 @@ const cloneDeep = require('lodash.clonedeep');
 const mapKeys = require('lodash.mapkeys');
 const snakeCase = require('lodash.snakecase');
 
-const { DefaultProvider: Crypto } = require('@cumulus/ingest/crypto');
+const { DefaultProvider: S3KeyPairProvider } = require('@cumulus/common/key-pair-provider');
 
 const knex = require('../db/knex');
 const Model = require('./Model');
