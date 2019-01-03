@@ -1,7 +1,7 @@
 'use strict';
 
 const cloneDeep = require('lodash.clonedeep');
-const Crypto = require('@cumulus/ingest/crypto').DefaultProvider;
+const { DefaultProvider } = require('@cumulus/common/key-pair-provider');
 
 const { AssociatedRulesError } = require('../lib/errors');
 const Model = require('./model');
@@ -58,11 +58,11 @@ class Provider extends Model {
   }
 
   encrypt(value) {
-    return Crypto.encrypt(value);
+    return DefaultProvider.encrypt(value);
   }
 
   decrypt(value) {
-    return Crypto.decrypt(value);
+    return DefaultProvider.decrypt(value);
   }
 
   async encryptItem(item) {
