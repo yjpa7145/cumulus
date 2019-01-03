@@ -37,19 +37,6 @@ async function setupRecord(executionStatus) {
   await executionModel.createExecutionFromSns({ payload: originalPayload });
 }
 
-test.before(async () => {
-  process.env.ExecutionsTable = randomString();
-  manager = new Manager({
-    tableName: process.env.ExecutionsTable,
-    tableHash: { name: 'arn', type: 'S' }
-  });
-  await manager.createTable();
-});
-
-test.after.always(async () => {
-  await manager.deleteTable();
-});
-
 test.beforeEach(async () => {
   await setupRecord('running');
 });
@@ -103,13 +90,16 @@ test.serial('RemoveOldPayloadRecords fails to remove payload attributes from non
   t.truthy(updatedRecord.finalPayload);
 });
 
-test.serial('RemoveOldPayloadRecords removes payload attributes from old completed records', async (t) => {
+test.serial.only('RemoveOldPayloadRecords removes payload attributes from old completed records', async (t) => {
   await executionModel.delete({ arn: arn });
   await setupRecord('completed');
 
   await executionModel.updateExecutionFromSns({ payload: { test: 'payloadValue' } });
   await executionModel.removeOldPayloadRecords(0, 100, false, true);
   const updatedRecord = await executionModel.get({ arn: arn });
+
+  debugger;
+
   t.falsy(updatedRecord.originalPayload);
   t.falsy(updatedRecord.finalPayload);
 });
@@ -141,6 +131,7 @@ test.serial('RemoveOldPayloadRecords does not remove attributes from new complet
   await executionModel.updateExecutionFromSns({ payload: updatePayload });
   await executionModel.removeOldPayloadRecords(1, 1, false, false);
   const updatedRecord = await executionModel.get({ arn: arn });
+
   t.deepEqual(originalPayload, updatedRecord.originalPayload);
   t.deepEqual(updatePayload, updatedRecord.finalPayload);
 });
