@@ -167,36 +167,33 @@ class Execution extends Model {
    *   payloads
    * @param {boolean} disableNonComplete - Disable removal of execution payloads for
    *   statuses other than 'completed'
-   * @returns {Promise<Array>} - Execution table objects that were updated
+   * @returns {Promise<undefined>}
    */
   async removeOldPayloadRecords(completeMaxDays, nonCompleteMaxDays,
     disableComplete, disableNonComplete) {
     const msPerDay = 1000 * 3600 * 24;
-    const completeMaxMs = Date.now() - (msPerDay * completeMaxDays);
-    const nonCompleteMaxMs = Date.now() - (msPerDay * nonCompleteMaxDays);
-    const expiryDate = completeMaxDays < nonCompleteMaxDays ? completeMaxMs : nonCompleteMaxMs;
+    const completeMaxMs = new Date(new Date() - new Date((msPerDay * completeMaxDays)));
+    const nonCompleteMaxMs = new Date(new Date() - new Date((msPerDay * nonCompleteMaxDays)));
 
-    const x = (await this.getAll());
-
-    const oldExecutionRows = x
-      .filter((r) => r.updatedAt <= expiryDate)
-      .filter((r) => r.originalPayload || r.finalPayload);
-
-    debugger;
-
-    const concurrencyLimit = process.env.CONCURRENCY || 10;
-    const limit = pLimit(concurrencyLimit);
-
-    const updatePromises = oldExecutionRows.map((row) => limit(() => {
-      if (!disableComplete && row.status === 'completed' && row.updatedAt <= completeMaxMs) {
-        return this.update({ arn: row.arn }, {}, ['originalPayload', 'finalPayload']);
-      }
-      if (!disableNonComplete && !(row.status === 'completed') && row.updatedAt <= nonCompleteMaxMs) {
-        return this.update({ arn: row.arn }, {}, ['originalPayload', 'finalPayload']);
-      }
-      return Promise.resolve();
-    }));
-    return Promise.all(updatePromises);
+    if (!disableComplete) {
+      // TODO: use gateway
+      await this.table()
+        .where('updated_at', '<=', completeMaxMs)
+        .where('status', 'completed')
+        .update({
+          original_payload: null,
+          final_payload: null
+        });
+    }
+    if (!disableNonComplete) {
+      await this.table()
+        .where('updated_at', '<=', nonCompleteMaxMs)
+        .whereNot('status', 'completed')
+        .update({
+          original_payload: null,
+          final_payload: null
+        });
+    }
   }
 
   /**
