@@ -662,10 +662,11 @@ test.serial('reingest a granule', async (t) => {
 });
 
 test.serial('pass a sns message to main handler', async (t) => {
-  const txt = fs.readFileSync(path.join(
+  let txt = fs.readFileSync(path.join(
     __dirname,
     '../../data/sns_message_granule.txt'
   ), 'utf8');
+  txt = txt.replace('{{random_string}}', randomString());
 
   const event = JSON.parse(JSON.parse(txt.toString()));
   const resp = await indexer.handler(event, {}, noop);
@@ -676,6 +677,7 @@ test.serial('pass a sns message to main handler', async (t) => {
   t.falsy(resp[0].pdr);
 
   // fake granule index to elasticsearch (this is done in a lambda function)
+
   await indexer.indexGranule(esClient, resp[0].granule[0]);
 
   const msg = JSON.parse(event.Records[0].Sns.Message);
@@ -693,10 +695,12 @@ test.serial('pass a sns message to main handler', async (t) => {
 });
 
 test.serial('pass a sns message to main handler with parse info', async (t) => {
-  const txt = fs.readFileSync(path.join(
+  let txt = fs.readFileSync(path.join(
     __dirname,
     '../../data/sns_message_parse_pdr.txt'
   ), 'utf8');
+
+  txt = txt.replace('{{random_string}}', randomString());
 
   const event = JSON.parse(JSON.parse(txt.toString()));
   const resp = await indexer.handler(event, {}, noop);
@@ -722,9 +726,11 @@ test.serial('pass a sns message to main handler with parse info', async (t) => {
 });
 
 test.serial('pass a sns message to main handler with discoverpdr info', async (t) => {
-  const txt = fs.readFileSync(path.join(
+  let txt = fs.readFileSync(path.join(
     __dirname, '../../data/sns_message_discover_pdr.txt'
   ), 'utf8');
+
+  txt = txt.replace('{{random_string}}', randomString());
 
   const event = JSON.parse(JSON.parse(txt.toString()));
   const resp = await indexer.handler(event, {}, noop);
