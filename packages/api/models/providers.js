@@ -132,11 +132,11 @@ class Provider extends Model {
   }
 
   encrypt(value) {
-    return Crypto.encrypt(value);
+    return S3KeyPairProvider.encrypt(value);
   }
 
   decrypt(value) {
-    return Crypto.decrypt(value);
+    return S3KeyPairProvider.decrypt(value);
   }
 
   async encryptItem(item) {

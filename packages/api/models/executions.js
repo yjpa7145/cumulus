@@ -2,7 +2,6 @@
 
 const aws = require('@cumulus/ingest/aws');
 const get = require('lodash.get');
-const pLimit = require('p-limit');
 
 const { constructCollectionId } = require('@cumulus/common');
 
@@ -26,7 +25,7 @@ function buildExecutionModel(executionRecord) {
     name: executionRecord.name,
     status: executionRecord.status,
     type: executionRecord.type,
-    error: executionRecord.error,
+    error: executionRecord.error
   };
 
   if (executionRecord.original_payload) {
@@ -51,7 +50,7 @@ function executionModelToRecord(executionModel) {
     execution: executionModel.execution,
     name: executionModel.name,
     status: executionModel.status,
-    type: executionModel.type,
+    type: executionModel.type
   };
 
   if (executionModel.error) {
@@ -184,7 +183,7 @@ class Execution extends Model {
    * @returns {Promise<undefined>}
    */
   async removeOldPayloadRecords(completeMaxDays, notCompleteMaxDays,
-    disableComplete, disableNotComplete) {
+    disableComplete = false, disableNotComplete = false) {
     // TODO: Sort args
     const msPerDay = 1000 * 3600 * 24;
     const { db } = privates.get(this);
