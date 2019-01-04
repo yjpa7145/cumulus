@@ -185,5 +185,5 @@ test('GET fails if execution is not found', async (t) => {
   const response = await testEndpoint(executionEndpoint, event, (r) => r);
   t.is(response.statusCode, 400);
   const { message } = JSON.parse(response.body);
-  t.true(message.includes('No record found for'));
+  t.true(message.includes('No record found'));
 });

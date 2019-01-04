@@ -405,7 +405,7 @@ function logHandler(event, context, cb) {
  * @param  {function} cb - aws lambda callback function
  * @returns {Promise} undefined
  */
-function handler(event, context, cb) {
+async function handler(event) {
   // we can handle both incoming message from SNS as well as direct payload
   log.debug(JSON.stringify(event));
   const records = get(event, 'Records');
@@ -421,10 +421,8 @@ function handler(event, context, cb) {
   return Promise.all(jobs)
     .then((r) => {
       log.info(`Updated ${r.length} es records`);
-      cb(null, r);
       return r;
-    })
-    .catch(cb);
+    });
 }
 
 module.exports = {

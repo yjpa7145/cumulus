@@ -99,6 +99,7 @@ exports.up = async (knex) => {
 };
 
 exports.down = async (knex) => {
+  await knex.schema.dropTable('rule_tags');
   await knex.schema.dropTable('rules');
   await knex.schema.dropTable('collection_tags');
   await knex.schema.dropTable('tags');

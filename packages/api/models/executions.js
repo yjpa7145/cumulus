@@ -16,22 +16,24 @@ const { parseException } = require('../lib/utils');
 function buildExecutionModel(executionRecord) {
   const executionModel = {
     arn: executionRecord.arn,
+    createdAt: executionRecord.created_at,
+    collectionId: executionRecord.collection_id,
+    duration: executionRecord.duration / 1000,
+    updatedAt: executionRecord.updated_at,
+    parentArn: executionRecord.parent_arn,
+    timestamp: executionRecord.timestamp,
     execution: executionRecord.execution,
     name: executionRecord.name,
     status: executionRecord.status,
-    type: executionRecord.type
+    type: executionRecord.type,
+    error: executionRecord.error,
   };
 
-  if (executionRecord.error) {
-    executionModel.error = JSON.parse(executionRecord.error);
-  }
-
-  if (executionRecord.final_payload) {
-    executionModel.finalPayload = JSON.parse(executionRecord.final_payload);
-  }
-
   if (executionRecord.original_payload) {
-    executionModel.originalPayload = JSON.parse(executionRecord.original_payload);
+    executionModel.originalPayload = executionRecord.original_payload;
+  }
+  if (executionRecord.final_payload) {
+    executionModel.finalPayload = executionRecord.final_payload;
   }
 
   return executionModel;
@@ -40,10 +42,16 @@ function buildExecutionModel(executionRecord) {
 function executionModelToRecord(executionModel) {
   const executionRecord = {
     arn: executionModel.arn,
+    created_at: executionModel.createdAt,
+    collection_id: executionModel.collectionId,
+    duration: Math.round(executionModel.duration * 1000),
+    parent_arn: executionModel.parentArn,
+    timestamp: executionModel.timestamp,
+    updated_at: executionModel.updatedAt,
     execution: executionModel.execution,
     name: executionModel.name,
     status: executionModel.status,
-    type: executionModel.type
+    type: executionModel.type,
   };
 
   if (executionModel.error) {
@@ -68,6 +76,12 @@ class Execution extends Model {
     super();
 
     privates.set(this, { db: knex() });
+  }
+
+  async exists({ arn }) {
+    const { db } = privates.get(this);
+    const executionRecord = await executionsGateway.findByArn(db, arn);
+    return executionRecord !== undefined;
   }
 
   async get({ arn }) {
@@ -161,38 +175,27 @@ class Execution extends Model {
    *
    * @param {integer} completeMaxDays - Maximum number of days a completed
    *   record may have payload entries
-   * @param {integer} nonCompleteMaxDays - Maximum number of days a non-completed
+   * @param {integer} notCompleteMaxDays - Maximum number of days a non-completed
    *   record may have payload entries
    * @param {boolean} disableComplete - Disable removal of completed execution
    *   payloads
-   * @param {boolean} disableNonComplete - Disable removal of execution payloads for
+   * @param {boolean} disableNotComplete - Disable removal of execution payloads for
    *   statuses other than 'completed'
    * @returns {Promise<undefined>}
    */
-  async removeOldPayloadRecords(completeMaxDays, nonCompleteMaxDays,
-    disableComplete, disableNonComplete) {
+  async removeOldPayloadRecords(completeMaxDays, notCompleteMaxDays,
+    disableComplete, disableNotComplete) {
+    // TODO: Sort args
     const msPerDay = 1000 * 3600 * 24;
-    const completeMaxMs = new Date(new Date() - new Date((msPerDay * completeMaxDays)));
-    const nonCompleteMaxMs = new Date(new Date() - new Date((msPerDay * nonCompleteMaxDays)));
+    const { db } = privates.get(this);
 
     if (!disableComplete) {
-      // TODO: use gateway
-      await this.table()
-        .where('updated_at', '<=', completeMaxMs)
-        .where('status', 'completed')
-        .update({
-          original_payload: null,
-          final_payload: null
-        });
+      const completeMaxMs = Date.now() - (msPerDay * completeMaxDays);
+      await executionsGateway.deletePayloadsCompletedBefore(db, completeMaxMs);
     }
-    if (!disableNonComplete) {
-      await this.table()
-        .where('updated_at', '<=', nonCompleteMaxMs)
-        .whereNot('status', 'completed')
-        .update({
-          original_payload: null,
-          final_payload: null
-        });
+    if (!disableNotComplete) {
+      const notCompleteMaxMs = Date.now() - (msPerDay * notCompleteMaxDays);
+      await executionsGateway.deletePayloadsNotCompletedBefore(db, notCompleteMaxMs);
     }
   }
 
@@ -210,7 +213,7 @@ class Execution extends Model {
 
     doc.finalPayload = get(payload, 'payload');
     doc.originalPayload = existingRecord.originalPayload;
-    doc.duration = (doc.timestamp - doc.createdAt) / 1000;
+    doc.duration = doc.timestamp - doc.createdAt;
 
     return this.update({ arn: doc.arn }, doc);
   }
@@ -224,7 +227,7 @@ class Execution extends Model {
   async createExecutionFromSns(payload) {
     const doc = this.generateDocFromPayload(payload);
     doc.originalPayload = get(payload, 'payload');
-    doc.duration = (doc.timestamp - doc.createdAt) / 1000;
+    doc.duration = doc.timestamp - doc.createdAt;
 
     return this.create(doc);
   }

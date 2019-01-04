@@ -53,6 +53,9 @@ test.serial('Creating an execution adds a record to the database with matching v
   delete doc.updatedAt;
   delete record.updatedAt;
   doc.duration = record.duration;
+  doc.createdAt = record.createdAt;
+
+
 
   t.true(recordExists);
   t.deepEqual(record, doc);
@@ -67,8 +70,8 @@ test.serial('Updating an existing record updates the record as expected', async 
   doc.originalPayload = originalPayload;
   doc.duration = record.duration;
   doc.finalPayload = finalPayload;
-  delete doc.updatedAt;
-  delete record.updatedAt;
+  doc.createdAt = record.createdAt;
+  doc.updatedAt = record.updatedAt;
 
   t.deepEqual(finalPayload, record.finalPayload);
   t.deepEqual(doc, record);
@@ -90,15 +93,13 @@ test.serial('RemoveOldPayloadRecords fails to remove payload attributes from non
   t.truthy(updatedRecord.finalPayload);
 });
 
-test.serial.only('RemoveOldPayloadRecords removes payload attributes from old completed records', async (t) => {
+test.serial('RemoveOldPayloadRecords removes payload attributes from old completed records', async (t) => {
   await executionModel.delete({ arn: arn });
   await setupRecord('completed');
 
   await executionModel.updateExecutionFromSns({ payload: { test: 'payloadValue' } });
   await executionModel.removeOldPayloadRecords(0, 100, false, true);
   const updatedRecord = await executionModel.get({ arn: arn });
-
-  debugger;
 
   t.falsy(updatedRecord.originalPayload);
   t.falsy(updatedRecord.finalPayload);

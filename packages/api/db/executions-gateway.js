@@ -7,11 +7,14 @@ const EXECUTIONS_TABLE = 'executions';
 function filterExecutionFields(executionRecord) {
   const fields = [
     'arn',
+    'collection_id',
     'created_at',
+    'duration',
     'error',
     'execution',
     'final_payload',
     'name',
+    'parent_arn',
     'original_payload',
     'status',
     'timestamp',
@@ -22,9 +25,28 @@ function filterExecutionFields(executionRecord) {
   return pick(executionRecord, fields);
 }
 
+function deletePayloadsCompletedBefore(db, ms) {
+  return db(EXECUTIONS_TABLE)
+    .where('updated_at', '<=', ms)
+    .where('status', 'completed')
+    .update({
+      original_payload: null,
+      final_payload: null
+    });
+}
+
+function deletePayloadsNotCompletedBefore(db, ms) {
+  return db(EXECUTIONS_TABLE)
+    .where('updated_at', '<=', ms)
+    .whereNot('status', 'completed')
+    .update({
+      original_payload: null,
+      final_payload: null
+    });
+}
+
 function find(db, params = {}) {
   let query = db(EXECUTIONS_TABLE);
-
   if (params.where) query = query.where(params.where);
   if (params.whereNot) query = query.whereNot(params.whereNot);
 
@@ -40,8 +62,8 @@ async function insert(db, executionRecord) {
 
   await db(EXECUTIONS_TABLE)
     .insert({
-      ...filterExecutionFields(executionRecord),
       created_at: now,
+      ...filterExecutionFields(executionRecord),
       updated_at: now
     });
 
@@ -60,6 +82,8 @@ async function update(db, arn, executionRecord) {
 }
 
 module.exports = {
+  deletePayloadsCompletedBefore,
+  deletePayloadsNotCompletedBefore,
   find,
   findByArn,
   insert,

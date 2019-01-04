@@ -13,7 +13,7 @@ exports.up = async (knex) => {
       table.bigIncrements('id').primary(),
       table.string('arn').unique().notNull(),
       table.string('parent_arn');
-      table.float('duration');
+      table.bigInteger('duration');
       table.string('name');
       table.string('execution');
       table.json('error');
@@ -23,7 +23,7 @@ exports.up = async (knex) => {
       table.enu('status', ['running', 'completed', 'failed' ,'unknown']).notNullable();
       table.bigInteger('created_at').notNullable();
       table.bigInteger('updated_at').notNullable();
-      table.bigInteger('timestamp').notNullable();
+      table.bigInteger('timestamp');
       table.json('original_payload');
       table.json('final_payload');
     });
