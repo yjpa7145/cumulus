@@ -84,11 +84,11 @@ default:
       autoPause: true
       secondsUntilAutoPause: 300
     subnet:
-      name: '{{stackName}}_sububnet'
+      name: '{{stackName}}_subnet'
       description: 'Cumulus database subnet for {{stackName}}'
       subnetIds:
-        - '{{DEV_SUBNET1}}'
-        - '{{DEV_SUBNET2}}'
+        - '{{SUBNET_ID_1}}'
+        - '{{SUBNET_ID_2}}'
 
   ecs:
     instanceType: t2.medium
@@ -496,6 +496,42 @@ jk:
 jk2:
   stackName: jk2
   stackNameNoDash: jk2
+
+
+jk3:
+  prefix: jk3
+  stackName: jk3
+  stackNameNoDash: jk3
+  buckets:
+    internal:
+      name: jk3-internal
+      type: internal
+    private:
+      name: jk3-private
+      type: private
+    protected:
+      name: jk3-protected
+      type: protected
+    public:
+      name: jk3-public
+      type: public
+    protected-2:
+      name: jk3-protected-2
+      type: protected
+    shared:
+      name: cumulus-data-shared
+      type: shared
+  api_distribution_url: '{{API_DISTRIBUTION_URL}}'
+  system_bucket: '{{buckets.internal.name}}'
+
+  users:
+    - username: '{{EARTHDATA_LOGIN_USERNAME}}'
+
+  AutoScalingPolicyConfiguration:
+  GranulesTable:
+    enableAutoScaling: false
+  FilesTable:
+    enableAutoScaling: false
 
 mboyd-test:
   stackName: mboyd-test

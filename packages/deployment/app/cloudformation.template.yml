@@ -116,7 +116,7 @@ Resources:
   # Nested CloudFormation Templates config END
   #################################################
 
-{{#ifEquals rds.engineMode 'foo'}}
+{{#ifEquals rds.engineMode 'provisioned'}}
   CumulusRDSCluster:
     Type: AWS::RDS::DBCluster
     Properties:
@@ -134,7 +134,7 @@ Resources:
       DBClusterIdentifier: !Ref CumulusRDSCluster
       DBInstanceClass: {{rds.dbInstanceClass}}
 {{/ifEquals}}
-{{#ifEquals rds.engineMode 'bar'}}
+{{#ifEquals rds.engineMode 'serverless'}}
   CumulusRDSCluster:
     Type: AWS::RDS::DBCluster
     Properties:
