@@ -22,7 +22,6 @@ default:
     public:
       name: change-me
       type: public
-
   params:
      - name: ResourcePrefix
        value: '{{prefix}}'

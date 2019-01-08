@@ -247,6 +247,30 @@ jk:
 jk2:
   prefix: jk2
 
+jk3:
+  prefix: jk3
+  buckets:
+    internal:
+      name: jk3-internal
+      type: internal
+    private:
+      name: jk3-private
+      type: private
+    protected:
+      name: jk3-protected
+      type: protected
+    public:
+      name: jk3-public
+      type: public
+    protected-2:
+      name: jk3-protected-2
+      type: protected
+    shared:
+      name: cumulus-data-shared
+      type: shared
+
+  system_bucket: jk3-internal
+
 mboyd-test:
   prefix: mboyd-test
   stackName: mboyd-test-iam

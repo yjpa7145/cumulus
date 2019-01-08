@@ -69,6 +69,27 @@ default:
     subnets:
       - '{{AWS_SUBNET}}'
 
+  rds:
+    enabled: true
+    user: '{{RDS_USER}}'
+    password: '{{RDS_PASSWORD}}'
+    databaseName: '{{stackName}}_cumulusDatabase'
+    engine: aurora
+    engineMode: serverless
+    dbSubnetGroupName: default
+    dbInstanceClass: db.t2.small
+    scaling:
+      maxCapacity: 2
+      minCapacity: 2
+      autoPause: true
+      secondsUntilAutoPause: 300
+    subnet:
+      name: '{{stackName}}_subnet'
+      description: 'Cumulus database subnet for {{stackName}}'
+      subnetIds:
+        - '{{SUBNET_ID_1}}'
+        - '{{SUBNET_ID_2}}'
+
   ecs:
     instanceType: t2.medium
     desiredInstances: 1
@@ -475,6 +496,42 @@ jk:
 jk2:
   stackName: jk2
   stackNameNoDash: jk2
+
+
+jk3:
+  prefix: jk3
+  stackName: jk3
+  stackNameNoDash: jk3
+  buckets:
+    internal:
+      name: jk3-internal
+      type: internal
+    private:
+      name: jk3-private
+      type: private
+    protected:
+      name: jk3-protected
+      type: protected
+    public:
+      name: jk3-public
+      type: public
+    protected-2:
+      name: jk3-protected-2
+      type: protected
+    shared:
+      name: cumulus-data-shared
+      type: shared
+  api_distribution_url: '{{API_DISTRIBUTION_URL}}'
+  system_bucket: '{{buckets.internal.name}}'
+
+  users:
+    - username: '{{EARTHDATA_LOGIN_USERNAME}}'
+
+  AutoScalingPolicyConfiguration:
+  GranulesTable:
+    enableAutoScaling: false
+  FilesTable:
+    enableAutoScaling: false
 
 mboyd-test:
   stackName: mboyd-test
