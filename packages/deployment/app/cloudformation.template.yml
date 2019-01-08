@@ -115,7 +115,7 @@ Resources:
   #################################################
   # Nested CloudFormation Templates config END
   #################################################
-
+{{#if rds.enabled}}
 {{#ifEquals rds.engineMode 'provisioned'}}
   CumulusRDSCluster:
     Type: AWS::RDS::DBCluster
@@ -160,7 +160,7 @@ Resources:
         - {{this}}
          {{/each}}
 {{/ifEquals}}
-
+{{/if}}
   #################################################
   # Cumulus Custom Resource BEGIN
   #################################################

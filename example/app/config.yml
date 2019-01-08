@@ -66,11 +66,11 @@ default:
 
   vpc:
     vpcId: '{{VPC_ID}}'
-
     subnets:
       - '{{AWS_SUBNET}}'
 
   rds:
+    enabled: true
     user: '{{RDS_USER}}'
     password: '{{RDS_PASSWORD}}'
     databaseName: '{{stackName}}_cumulusDatabase'
