@@ -21,6 +21,8 @@ exports.reconciliationReports = require('./endpoints/reconciliation-reports');
 
 exports.bootstrap = require('./lambdas/bootstrap').handler;
 exports.executeMigrations = require('./lambdas/executeMigrations').handler;
+exports.rdsMigrations = require('./lambdas/migrate').handler;
+exports.manualRdsMigrations = require('./lambdas/migrate').manualMigration;
 exports.cleanExecutions = require('./lambdas/cleanExecutions').handler;
 exports.inRegionS3Policy = require('./lambdas/in-region-s3-policy').handler;
 exports.jobs = require('./lambdas/jobs');

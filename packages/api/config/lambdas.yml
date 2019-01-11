@@ -3,35 +3,31 @@ sqs2sf:
   timeout: 200
   memory: 512
   source: 'node_modules/@cumulus/api/dist/'
+  launchInVpc: true
 
-
-executeMigrations:
-  handler: index.executeMigrations
+rdsMigrations:
+  handler: index.rdsMigrations
   timeout: 300
-  useElasticSearch: '{{es.name}}'
   memory: 1024
   source: 'node_modules/@cumulus/api/dist/'
+  rds: true
   envs:
-    GranulesTable:
-      function: Ref
-      value: GranulesTableDynamoDB
-    FilesTable:
-      function: Ref
-      value: FilesTableDynamoDB
-    ExecutionsTable:
-      function: Ref
-      value: ExecutionsTableDynamoDB
-    PdrsTable:
-      function: Ref
-      value: PdrsTableDynamoDB
-    RulesTable:
-      function: Ref
-      value: RulesTableDynamoDB
-    KinesisInboundEventLogger:
-      function: Ref
-      value: KinesisInboundEventLoggerLambdaFunction
-    internal: '{{system_bucket}}'
+    RdsUser: '{{rds.user}}'
+    RdsPassword: '{{rds.password}}'
+    RdsDatabaseName: '{{rds.databaseName}}'
+  launchInVpc: true
 
+manualRdsMigrations:
+  handler: index.manualRdsMigrations
+  timeout: 300
+  memory: 1024
+  source: 'node_modules/@cumulus/api/dist/'
+  rds: true
+  envs:
+    RdsUser: '{{rds.user}}'
+    RdsPassword: '{{rds.password}}'
+    RdsDatabaseName: '{{rds.databaseName}}'
+  launchInVpc: true
 
 sns2elasticsearch:
   handler: index.indexer
@@ -50,6 +46,7 @@ sns2elasticsearch:
       function: Ref
       value: PdrsTableDynamoDB
   namedLambdaDeadLetterQueue: true
+  launchInVpc: true
 
 log2elasticsearch:
   handler: index.logHandler
@@ -58,6 +55,7 @@ log2elasticsearch:
   useElasticSearch: '{{es.name}}'
   source: 'node_modules/@cumulus/api/dist/'
   namedLambdaDeadLetterQueue: true
+  launchInVpc: true
 
 dbIndexer:
   handler: index.dbIndexer
@@ -71,6 +69,7 @@ dbIndexer:
       function: Ref
       value: FilesTableDynamoDB
   namedLambdaDeadLetterQueue: true
+  launchInVpc: true
 
 messageConsumer:
   handler: index.messageConsumer
@@ -91,6 +90,7 @@ messageConsumer:
     FallbackTopicArn:
       function: Fn::Sub
       value: '${kinesisFallbackSns}'
+  launchInVpc: true
 
 fallbackConsumer:
   handler: index.messageConsumer
@@ -109,6 +109,7 @@ fallbackConsumer:
       function: Ref
       value: ProvidersTableDynamoDB
     bucket: '{{system_bucket}}'
+  launchInVpc: true
 
 ScheduleSF:
   description: 'This lambda function is invoked by scheduled rules created via cumulus API'
@@ -124,6 +125,7 @@ ScheduleSF:
       function: Ref
       value: ProvidersTableDynamoDB
   namedLambdaDeadLetterQueue: true
+  launchInVpc: true
 
 jobs:
   handler: index.jobs
@@ -132,6 +134,7 @@ jobs:
   useElasticSearch: '{{es.name}}'
   source: 'node_modules/@cumulus/api/dist/'
   namedLambdaDeadLetterQueue: true
+  launchInVpc: true
 
 cleanExecutions:
   handler: index.cleanExecutions
@@ -147,6 +150,7 @@ cleanExecutions:
     ExecutionsTable:
       function: Ref
       value: ExecutionsTableDynamoDB
+  launchInVpc: true
 
 # used as custom resource for cloudformation manipulation
 CustomBootstrap:
@@ -173,6 +177,7 @@ EmsReport:
     bucket: '{{system_bucket}}'
     ems_provider: '{{ems.provider}}'
   namedLambdaDeadLetterQueue: true
+  launchInVpc: true
 
 
 EmsDistributionReport:
@@ -184,6 +189,7 @@ EmsDistributionReport:
     LOGS_BUCKET: '{{system_bucket}}'
     REPORTS_BUCKET: '{{system_bucket}}'
     STACK_NAME: '{{stackName}}'
+  launchInVpc: true
 
 CreateReconciliationReport:
   handler: index.createReconciliationReport
@@ -193,19 +199,23 @@ CreateReconciliationReport:
     filesTableName:
       function: Ref
       value: FilesTableDynamoDB
+  launchInVpc: true
 
 BulkDelete:
   handler: index.bulkDeleteLambda
   source: 'node_modules/@cumulus/api/dist/'
+  launchInVpc: true
 
 KinesisInboundEventLogger:
   handler: index.logger
   timeout: 300
   memory: 512
   source: 'node_modules/@cumulus/api/dist/'
+  launchInVpc: true
 
 KinesisOutboundEventLogger:
   handler: index.logger
   timeout: 300
   memory: 512
   source: 'node_modules/@cumulus/api/dist'
+  launchInVpc: true

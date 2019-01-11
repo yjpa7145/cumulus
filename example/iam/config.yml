@@ -271,6 +271,31 @@ jk3:
 
   system_bucket: jk3-internal
 
+jk4:
+  prefix: jk4
+  useNgapPermissionBoundary: false
+  buckets:
+    internal:
+      name: jk4-internal
+      type: internal
+    private:
+      name: jk4-private
+      type: private
+    protected:
+      name: jk4-protected
+      type: protected
+    public:
+      name: jk4-public
+      type: public
+    protected-2:
+      name: jk4-protected-2
+      type: protected
+    shared:
+      name: cumulus-data-shared
+      type: shared
+
+  system_bucket: jk4-internal
+
 mboyd-test:
   prefix: mboyd-test
   stackName: mboyd-test-iam

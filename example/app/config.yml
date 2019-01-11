@@ -73,10 +73,10 @@ default:
     enabled: true
     user: '{{RDS_USER}}'
     password: '{{RDS_PASSWORD}}'
-    databaseName: '{{stackName}}_cumulusDatabase'
-    engine: aurora
-    engineMode: serverless
-    dbSubnetGroupName: default
+    databaseName: '{{stackName}}_CumulusRDS'
+    engine: aurora-mysql
+    engineVersion: 5.7
+    engineMode: provisioned
     dbInstanceClass: db.t2.small
     scaling:
       maxCapacity: 2
@@ -87,9 +87,12 @@ default:
       name: '{{stackName}}_subnet'
       description: 'Cumulus database subnet for {{stackName}}'
       subnetIds:
-        - '{{SUBNET_ID_1}}'
-        - '{{SUBNET_ID_2}}'
-
+        - '{{RDS_SUBNET_ID_1}}'
+        - '{{RDS_SUBNET_ID_2}}'
+    parameterGroup:
+      name: cumulusRDS
+      description: 'Cumulus parameter group for RDS Database for {{stackName}}'
+      family: aurora-mysql5.7
   ecs:
     instanceType: t2.medium
     desiredInstances: 1
@@ -517,6 +520,41 @@ jk3:
       type: public
     protected-2:
       name: jk3-protected-2
+      type: protected
+    shared:
+      name: cumulus-data-shared
+      type: shared
+  api_distribution_url: '{{API_DISTRIBUTION_URL}}'
+  system_bucket: '{{buckets.internal.name}}'
+
+  users:
+    - username: '{{EARTHDATA_LOGIN_USERNAME}}'
+
+  AutoScalingPolicyConfiguration:
+  GranulesTable:
+    enableAutoScaling: false
+  FilesTable:
+    enableAutoScaling: false
+
+jk4:
+  prefix: jk4
+  stackName: jk4
+  stackNameNoDash: jk4
+  buckets:
+    internal:
+      name: jk4-internal
+      type: internal
+    private:
+      name: jk4-private
+      type: private
+    protected:
+      name: jk4-protected
+      type: protected
+    public:
+      name: jk4-public
+      type: public
+    protected-2:
+      name: jk4-protected-2
       type: protected
     shared:
       name: cumulus-data-shared

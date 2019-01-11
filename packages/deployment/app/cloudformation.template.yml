@@ -116,6 +116,13 @@ Resources:
   # Nested CloudFormation Templates config END
   #################################################
 {{#if rds.enabled}}
+  CumulusRDSMigrationCustomResource:
+    Type: Custom::Cumulus
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - rdsMigrationsLambdaFunction
+          - Arn
 {{#ifEquals rds.engineMode 'provisioned'}}
   CumulusRDSCluster:
     Type: AWS::RDS::DBCluster
@@ -123,14 +130,21 @@ Resources:
       MasterUsername: '{{rds.user}}'
       MasterUserPassword: '{{rds.password}}'
       DatabaseName: {{stackName}}_CumulusRDS
-      Engine: aurora
+      Engine: {{rds.engine}}
+      EngineVersion: {{rds.engineVersion}}
       EngineMode: provisioned
-      DBSubnetGroupName: {{rds.dbSubnetGroupName}}
-
+      DBSubnetGroupName: {{rds.subnet.name}}
+      DBClusterParameterGroupName: !Ref CumulusRDSClusterParameterGroup
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroup
+    DependsOn:
+      - CumulusRDSSubnetGroup
+      - CumulusRDSClusterParameterGroup
   CumulusPrimaryRDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: {{rds.engine}}
+      EngineVersion: {{rds.engineVersion}}
       DBClusterIdentifier: !Ref CumulusRDSCluster
       DBInstanceClass: {{rds.dbInstanceClass}}
 {{/ifEquals}}
@@ -141,7 +155,8 @@ Resources:
       MasterUsername: '{{rds.user}}'
       MasterUserPassword: '{{rds.password}}'
       DatabaseName: {{stackName}}_CumulusRDS
-      Engine: aurora
+      Engine: {{rds.engine}}
+      EngineVersion: {{rds.engineVersion}}
       EngineMode: serverless
       DBSubnetGroupName: '{{rds.subnet.name}}'
       ScalingConfiguration:
@@ -150,6 +165,7 @@ Resources:
         MinCapacity: {{rds.scaling.minCapacity}}
         SecondsUntilAutoPause: {{rds.scaling.secondsUntilAutoPause}}
     DependsOn: CumulusRDSSubnetGroup
+{{/ifEquals}}
   CumulusRDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -158,8 +174,23 @@ Resources:
       SubnetIds:
         {{#each rds.subnet.subnetIds}}
         - {{this}}
-         {{/each}}
-{{/ifEquals}}
+        {{/each}}
+  CumulusRDSClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: {{rds.parameterGroup.description}}
+      Family: {{rds.parameterGroup.family}}
+      Parameters:
+        aurora_load_from_s3_role: {{iams.lambdaProcessingRoleArn}}
+        aurora_select_into_s3_role: {{iams.lambdaProcessingRoleArn}}
+        aws_default_lambda_role: {{iams.lambdaProcessingRoleArn}}
+        aws_default_logs_role: {{iams.lambdaProcessingRoleArn}}
+        aws_default_s3_role: {{iams.lambdaProcessingRoleArn}}
+  CumulusRDSParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: {{rds.parameterGroup.description}}
+      Family: {{rds.parameterGroup.family}}
 {{/if}}
   #################################################
   # Cumulus Custom Resource BEGIN
@@ -290,7 +321,6 @@ Resources:
   #################################################
 
   #################################################
-
   # SNS config BEGIN
   #################################################
 {{#each sns}}
@@ -692,6 +722,18 @@ Resources:
               - {{../es.name}}Domain
               - DomainEndpoint
         {{/if}}
+        {{#if this.rds }}
+        {{#if ../rds.enabled}}
+          Endpoint:
+            Fn::GetAtt:
+              - CumulusRDSCluster
+              - Endpoint.Address
+          EndpointPort:
+            Fn::GetAtt:
+              - CumulusRDSCluster
+              - Endpoint.Port
+        {{/if}}
+        {{/if}}
     {{#each this.envs}}
       {{# if this.function}}
         {{#if this.array}}
@@ -820,7 +862,7 @@ Resources:
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security Group for ECS containter instances of {{stackName}}
+      GroupDescription: Security Group for FIXME of {{stackName}}
       Tags:
         - Key: Name
           Value: "{{stackName}}"

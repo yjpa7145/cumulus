@@ -14,11 +14,13 @@ function typeCastMysql(field, next) {
   return next();
 }
 
-let config;
+const awsDatabaseUrl = `mysql://${process.env.RdsUser}:${process.env.RdsPassword}@${process.env.Endpoint}/${process.env.RdsDatabaseName}`;
+let config = parseConnection(awsDatabaseUrl);
+
 if (process.env.DATABASE_URL) {
   config = parseConnection(process.env.DATABASE_URL);
 }
-else {
+else if (process.env.testLocalMigration) {
   config = {
     debug: true,
     client: 'mysql',
@@ -29,11 +31,10 @@ else {
       password: 'password'
     }
   };
+  config.migrations = {
+    directory: './db/migrations'
+  };
 }
-
-config.migrations = {
-  directory: './db/migrations'
-};
 
 // This addresses mysql not having a native Bool type.
 if (config.client === 'mysql') {
