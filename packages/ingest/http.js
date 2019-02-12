@@ -15,16 +15,16 @@ module.exports.httpMixin = (superclass) => class extends superclass {
    *
    * @returns {Promise.<Array>} of a list of files
    */
-  list() {
+  async list() {
     const pattern = /<a href="([^>]*)">[^<]+<\/a>/;
     const c = new Crawler(urljoin(this.host, this.path));
 
-    c.timeout = 2000;
+    c.timeout = process.env.TIMEOUT || 2000;
     c.interval = 0;
-    c.maxConcurrency = 10;
+    c.maxConcurrency = process.env.MAX_CONCURRENCY || 10;
     c.respectRobotsTxt = false;
     c.userAgent = 'Cumulus';
-    c.maxDepth = 1;
+    c.maxDepth = process.env.MAX_DEPTH || 1;
     const files = [];
 
     return new Promise((resolve, reject) => {
@@ -43,9 +43,11 @@ module.exports.httpMixin = (superclass) => class extends superclass {
             }
           }
         });
-
-        return resolve(files);
       });
+
+      c.on('complete', () => {
+        resolve(files);
+      })
 
       c.on('fetchtimeout', reject);
       c.on('fetcherror', reject);
@@ -57,7 +59,7 @@ module.exports.httpMixin = (superclass) => class extends superclass {
           details: err
         };
 
-        return reject(e);
+        reject(e);
       });
 
       c.start();
