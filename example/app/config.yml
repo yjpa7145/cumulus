@@ -532,6 +532,8 @@ mboyd-test:
     'workflows/test.yml'
   ]
 
+  testQueue: '{{TEST_QUEUE}}'
+
 mboyd-int:
   stackName: mboyd-int
   stackNameNoDash: mboydInt

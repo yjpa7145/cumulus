@@ -139,4 +139,4 @@ ReadEvent:
   runtime: python2.7
   memory: 256
   envs:
-    INGEST_QUEUE: '{{AppConfig.sqs.ingest_queue_name}}'
+    INGEST_QUEUE: '{{testQueue}}'
