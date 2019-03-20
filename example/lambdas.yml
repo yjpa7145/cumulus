@@ -130,3 +130,13 @@ AsyncOperationSuccess:
 AsyncOperationFail:
   handler: lambdas.fail
   source: 'lambdas/asyncOperations/'
+ReadEvent:
+  handler: process_sqs.read_handler
+  timeout: 300
+  source: './python_modules'
+  useMessageAdapter: true
+  logToElasticSearch: true
+  runtime: python2.7
+  memory: 256
+  envs:
+    INGEST_QUEUE: '{{AppConfig.sqs.ingest_queue_name}}'
