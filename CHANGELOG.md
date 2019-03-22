@@ -6,12 +6,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### PLEASE NOTE
+
+- As a result of **CUMULUS-1208**, the granule object input to `@cumulus/queue-granules` will be added to ingest workflow messages **as is**. In practice, this means that if you are using `@cumulus/queue-granules` to trigger ingest workflows and your granule objects input have invalid properties, then your ingest workflows will fail due to schema validation errors.
+
 ### Added
 
+- **CUMULUS-805**
+  - Added a CloudWatch alarm to check running ElasticSearch instances, and a CloudWatch dashboard to view the health of ElasticSearch
+  - Specify `AWS_REGION` in `.env` to be used by deployment script
 - **CUMULUS-670**
   - Added new Collection file parameter "fileType" that allows configuration of workflow granule file fileType assignments
 - **CUMULUS-1184** - Added kes logging output to ensure we always see the state machine reference before failures due to configuration
 - **CUMULUS-1105** - Added a dashboard endpoint to serve the dashboard from an S3 bucket
+- **CUMULUS-1199** - Moves `s3credentials` endpoint from the backend to the distribution API.
 - **CUMULUS-666**
   - Added `@api/endpoints/s3credentials` to allow EarthData Login authorized users to retrieve temporary security credentials for same-region direct S3 access.
 - **CUMULUS-671**
@@ -46,6 +54,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **CUMULUS-1208** - Updated `@cumulus/ingest/queue/enqueueGranuleIngestMessage()` to not transform granule object passed to it when building an ingest message
 - **CUMULUS-1170**
   - Update scripts and docs to use `npm` instead of `yarn`
   - Use `package-lock.json` files to ensure matching versions of npm packages
@@ -105,6 +114,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - CUMULUS-1174
   - Better error message and stacktrace for S3KeyPairProvider error reporting.
+
+### Fixed
+
+- **CUMULUS-1218** Reconciliation report will now scan only completed granules.  
 
 ### Deprecated
 
