@@ -4,24 +4,25 @@ const router = require('express-promise-router')();
 
 const log = require('@cumulus/common/log');
 
+const asyncOperations = require('../endpoints/async-operations');
+const bulkDelete = require('../endpoints/bulk-delete');
 const collections = require('../endpoints/collections');
-const granules = require('../endpoints/granules');
-const providers = require('../endpoints/providers');
-const pdrs = require('../endpoints/pdrs');
-const rules = require('../endpoints/rules');
+const dashboard = require('../endpoints/dashboard');
+const elasticsearch = require('../endpoints/elasticsearch');
 const executionStatus = require('../endpoints/execution-status');
 const executions = require('../endpoints/executions');
-const asyncOperations = require('../endpoints/async-operations');
+const granules = require('../endpoints/granules');
 const instanceMeta = require('../endpoints/instance-meta');
-const bulkDelete = require('../endpoints/bulk-delete');
 const logs = require('../endpoints/logs');
+const providers = require('../endpoints/providers');
+const pdrs = require('../endpoints/pdrs');
 const reconcilliationReports = require('../endpoints/reconciliation-reports');
+const restore = require('../endpoints/restore');
+const rules = require('../endpoints/rules');
 const schemas = require('../endpoints/schemas');
 const stats = require('../endpoints/stats');
 const version = require('../endpoints/version');
 const workflows = require('../endpoints/workflows');
-const dashboard = require('../endpoints/dashboard');
-const elasticsearch = require('../endpoints/elasticsearch');
 
 let token = require('../endpoints/token');
 let { ensureAuthorized } = require('./auth');
@@ -76,6 +77,9 @@ router.use('/version', version);
 
 // workflows endpoint
 router.use('/workflows', ensureAuthorized, workflows);
+
+// restore endpoint
+router.use('/restore', ensureAuthorized, restore);
 
 router.delete('/token/:token', token.deleteTokenEndpoint);
 router.delete('/tokenDelete/:token', token.deleteTokenEndpoint);
