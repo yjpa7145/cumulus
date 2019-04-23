@@ -66,3 +66,11 @@ test('PUT with an invalid Authorization header returns an Authorization Missing 
     .expect(401);
   assertions.isAuthorizationMissingResponse(t, response);
 });
+
+test('PUT on a collection without restore configuration causes "recovery not configured" error', async (t) => {
+  const response = await request(app)
+    .put('/restore/NotExistingGranuleId')
+    .set('Authorization', `Bearer ${jwtAuthToken}`)
+    .expect(400);
+  console.log(response);
+});

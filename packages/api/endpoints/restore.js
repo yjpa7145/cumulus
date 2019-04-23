@@ -31,7 +31,7 @@ async function put(req, res) {
     granuleId: granule.granuleId,
     action: `applyWorkflow ${recoveryWorkflow}`,
     status: 'SUCCESS'
-  },));
+  }));
 }
 
 router.put('/:granuleName', put);
