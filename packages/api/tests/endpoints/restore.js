@@ -52,6 +52,12 @@ test.before(async ()=> {
   await s3().createBucket({ Bucket: testBucketName }).promise();
 });
 
+test('GET on the restore endpoint throws an error', async (t) => {
+  await request(app)
+    .get('/restore')
+    .expect(404);
+})
+
 test('PUT without an Authorization header returns an Authorization Missing response', async (t) => {
   const response = await request(app)
     .put('/restore')
