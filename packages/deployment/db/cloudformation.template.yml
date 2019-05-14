@@ -11,11 +11,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Database Security Group for {{prefix}}
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          CidrIp: {{vpc.cidrIp}}
-          FromPort: '443'
-          ToPort: '443'
       Tags:
         - Key: Name
           Value: '{{stackName}}'
