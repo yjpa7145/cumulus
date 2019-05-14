@@ -2,6 +2,30 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'stack: {{stackName}} | deployed by Kes'
 
 Resources:
+
+  #################################################
+  # SecurityGroup config BEGIN
+  #################################################
+{{# if vpc }}
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Database Security Group for {{prefix}}
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: {{vpc.cidrIp}}
+          FromPort: '443'
+          ToPort: '443'
+      Tags:
+        - Key: Name
+          Value: '{{stackName}}'
+      VpcId: {{vpc.vpcId}}
+{{/if}}
+
+  #################################################
+  # SecurityGroup config END
+  #################################################
+
   #################################################
   # DynamoDB config BEGIN
   #################################################
@@ -229,4 +253,13 @@ Outputs:
       Fn::GetAtt:
         - {{es.name}}Domain
         - DomainEndpoint
+{{/if}}
+
+{{#if vpc}}
+  DBSecurityGroup:
+    Description: Database security group
+    Value:
+      Fn::GetAtt: 
+        - SecurityGroup
+        - GroupId
 {{/if}}

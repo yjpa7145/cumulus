@@ -15,6 +15,12 @@ Parameters:
     Description: 'Email used to login to a private docker repository (not required)'
     Default: ""
     NoEcho: true
+{{#if vpc}}
+  DBSecurityGroup:
+    Type: String
+    Description: 'Security Group deployed by the db stack'
+    NoEcho: true
+{{/if}}
 {{#if es.name}}
   {{es.name}}DomainEndpoint:
     Type: String
@@ -104,7 +110,10 @@ Resources:
         {{@key}}DynamoDB: {{../../prefix}}-{{@key}}
       {{/each}}
       {{# if ../vpc }}
-        SecurityGroupId: {{../vpc.securityGroup}}
+        SecurityGroupId:
+          Fn::GetAtt: 
+            - SecurityGroup
+            - GroupId
       {{/if}}
       TemplateURL: {{this.url}}
 {{/ifNotEquals}}
@@ -471,7 +480,9 @@ Resources:
     {{# if ../vpc }}
       VpcConfig:
         SecurityGroupIds:
-          - {{../vpc.securityGroup}}
+          - Fn::GetAtt: 
+            - SecurityGroup
+            - GroupId
         SubnetIds:
         {{#each ../vpc.subnets}}
           - {{this}}
@@ -546,6 +557,50 @@ Resources:
   #################################################
   # ECS config BEGIN
   #################################################
+{{# if vpc }}
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for ECS Container instances of {{prefix}}
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: {{vpc.cidrIp}}
+          FromPort: '443'
+          ToPort: '443'
+      Tags:
+        - Key: Name
+          Value: '{{stackName}}'
+      VpcId: {{vpc.vpcId}}
+
+  DBSecurityGroupInbound:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow all traffic from App SG to DB SG
+      GroupId:
+        Ref: DBSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - SecurityGroup
+          - GroupId
+      SourceSecurityGroupOwnerId:
+        Fn::Sub: ${AWS::AccountId}
+
+  {{#if ecs.ssh}}
+  SecurityGroupSSHinbound:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Fn::GetAtt: 
+          - SecurityGroup
+          - GroupId
+      IpProtocol: tcp
+      FromPort: '22'
+      ToPort: '22'
+      CidrIp: 0.0.0.0/0
+  {{/if}}
+{{/if}}
+
 {{# if iams.instanceProfile}}
   CumulusECSCluster:
     Type: AWS::ECS::Cluster
@@ -558,8 +613,9 @@ Resources:
     {{/if}}
     {{# if vpc.securityGroup}}
       SecurityGroups:
-        - {{vpc.securityGroup}}
-    {{/if}}
+        - Fn::GetAtt:
+          - SecurityGroup
+          - GroupId
        {{# if ecs.efs.mount}}
         - Fn::ImportValue:
             "{{prefix}}-EFSSecurityGroup"
