@@ -611,12 +611,13 @@ Resources:
     {{# if vpc.subnets }}
       AssociatePublicIpAddress: {{#if ecs.publicIp}}{{ecs.publicIp}}{{else}}false{{/if}}
     {{/if}}
-    {{# if vpc.securityGroup}}
       SecurityGroups:
+        {{# if vpc }}
         - Fn::GetAtt:
           - SecurityGroup
           - GroupId
-       {{# if ecs.efs.mount}}
+        {{/if}}
+        {{# if ecs.efs.mount}}
         - Fn::ImportValue:
             "{{prefix}}-EFSSecurityGroup"
         {{/if}}
