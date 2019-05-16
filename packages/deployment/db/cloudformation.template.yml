@@ -194,7 +194,9 @@ Resources:
     {{# if vpc }}
       VPCOptions:
         SecurityGroupIds:
-          - {{vpc.securityGroup}}
+          - Fn::GetAtt: 
+            - SecurityGroup
+            - GroupId
         SubnetIds:
         {{#each vpc.subnets}}
           - {{this}}
