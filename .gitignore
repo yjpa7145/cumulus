@@ -36,3 +36,7 @@ search_index.json
 /example/app/nsidc.env
 /jsconfig.json
 /gh-pages
+.terraform
+*.tfvars
+terraform.tfstate
+terraform.tfstate.backup
