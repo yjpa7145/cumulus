@@ -8,6 +8,7 @@
   },
   "main": "index.js",
   "scripts": {
+    "build": "rm -rf dist && mkdir dist && webpack && (cd dist && zip package.zip index.js)",
     "test": "ava"
   },
   "repository": {
@@ -31,7 +32,7 @@
     "ava": "^1.4.1",
     "aws-sdk": "^2.452.0",
     "js-yaml": "^3.13.1",
-    "serverless": "^1.42.0",
-    "serverless-plugin-existing-s3": "^2.3.3"
+    "webpack": "^4.32.2",
+    "webpack-cli": "^3.3.2"
   }
 }
