@@ -211,7 +211,7 @@
                     "endpoint": {
                         "function": "Fn::GetAtt",
                         "array": [
-                            "sns2elasticsearchLambdaFunction",
+                            "executionToDynamoLambdaFunction",
                             "Arn"
                         ]
                     }
@@ -661,7 +661,7 @@
             "local": "app/build/cloudformation/7f0f6d58b5bfb46ec0d42fa41345ae8ec75dc133-ApiDistribution.zip",
             "remote": "lpdaac-cumulus/lambdas/7f0f6d58b5bfb46ec0d42fa41345ae8ec75dc133-ApiDistribution.zip"
         },
-        "sns2elasticsearch": {
+        "executionToDynamo": {
             "handler": "index.indexer",
             "timeout": 100,
             "envs": {
@@ -674,9 +674,9 @@
                 }
             },
             "memory": 256,
-            "source": "node_modules/@cumulus/api/dist/",
-            "name": "sns2elasticsearch",
-            "fullName": "lpdaac-cumulus-sns2elasticsearch",
+            "source": "node_modules/@cumulus/api/dist/executionToDynamo/",
+            "name": "executionToDynamo",
+            "fullName": "lpdaac-cumulus-executionToDynamo",
             "hash": "7f0f6d58b5bfb46ec0d42fa41345ae8ec75dc133",
             "bucket": "cumulus-devseed-internal",
             "local": "app/build/cloudformation/7f0f6d58b5bfb46ec0d42fa41345ae8ec75dc133-ApiDistribution.zip",

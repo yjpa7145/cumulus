@@ -7,7 +7,8 @@ const pLimit = require('p-limit');
 const log = require('@cumulus/common/log');
 const { StepFunction } = require('@cumulus/ingest/aws');
 const { Search } = require('../es/search');
-const { handlePayload, partialRecordUpdate } = require('../es/indexer');
+const { handlePayload } = require('../lambdas/executionToDynamo');
+const { partialRecordUpdate } = require('../es/indexer');
 
 async function findStaleRecords(type, q, limit = 100, page = 1) {
   const search = new Search({

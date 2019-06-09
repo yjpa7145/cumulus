@@ -13,6 +13,7 @@ module.exports = {
     emsDistributionReport: './lambdas/ems-distribution-report.js',
     emsIngestReport: './lambdas/ems-ingest-report.js',
     executeMigrations: './lambdas/executeMigrations.js',
+    executionToDynamo: './lambdas/executionToDynamo.js',
     indexer: './es/indexer.js',
     jobs: './lambdas/jobs.js',
     messageConsumer: './lambdas/message-consumer.js',

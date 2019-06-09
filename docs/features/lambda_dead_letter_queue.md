@@ -38,8 +38,10 @@ The following built-in cumulus lambdas have this feature enabled by default to a
 * EmsIngestReport (Daily EMS ingest report generation lambda)
 * JobsLambda (writes logs outputs to Elasticsearch)
 * log2elasticsearch (Lambda that exports logs into Elasticsearch)
-* ScheduleSF (The SF Scheduler lambda that places messages on the start SF queue, see [Workflow Triggers](../workflows/workflow-triggers.md))
-* sns2elasticsearch (API Lambda that takes a payload from a workflow and indexes it into Elasticsearch)
+* ScheduleSF (The SF Scheduler lambda that places messages on the start SF
+  queue, see [Workflow Triggers](../workflows/workflow-triggers.md))
+* executionToDynamo (API Lambda that takes a payload from a workflow and indexes
+  it into DynamoDB)
 
 ## Troubleshooting/Utilizing messages in a [Dead Letter Queue](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)
 

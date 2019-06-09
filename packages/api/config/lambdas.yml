@@ -14,13 +14,13 @@ sqs2sfThrottle:
   tables:
     - SemaphoresTable
 
-sns2elasticsearch:
+executionToDynamo:
   handler: index.handler
   timeout: 100
   useElasticSearch: '{{es.name}}'
   launchInVpc: true
   memory: 320
-  source: 'node_modules/@cumulus/api/dist/indexer/'
+  source: 'node_modules/@cumulus/api/dist/executionToDynamo/'
   tables:
     - GranulesTable
     - ExecutionsTable

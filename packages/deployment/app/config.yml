@@ -170,7 +170,7 @@ default:
           endpoint:
             function: Fn::GetAtt
             array:
-              - sns2elasticsearchLambdaFunction
+              - executionToDynamoLambdaFunction
               - Arn
           protocol: lambda
 
