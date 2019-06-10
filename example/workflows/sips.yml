@@ -69,18 +69,8 @@ SyncGranule:
 
 IngestAndPublishGranule:
   Comment: 'Ingest Granule'
-  StartAt: Report
+  StartAt: SyncGranule
   States:
-    Report:
-      Type: Task
-      Resource: ${SfSnsReportLambdaFunction.Arn}
-      CumulusConfig:
-        cumulus_message:
-          input: '{$}'
-      ResultPath: null
-      Retry:
-        - <<: *LambdaServiceExceptionRetry
-      Next: SyncGranule
     SyncGranule:
       CumulusConfig:
         buckets: '{$.meta.buckets}'
@@ -109,7 +99,7 @@ IngestAndPublishGranule:
         - ErrorEquals:
           - States.ALL
           ResultPath: '$.exception'
-          Next: StopStatus
+          Next: WorkflowSucceeded
       Next: ChooseProcess
     ChooseProcess:
       Type: Choice
@@ -117,7 +107,7 @@ IngestAndPublishGranule:
         - Variable: $.cumulus_meta.process
           StringEquals: modis
           Next: ProcessingStep
-      Default: StopStatus
+      Default: WorkflowSucceeded
     ProcessingStep:
       CumulusConfig:
         bucket: '{$.meta.buckets.internal.name}'
@@ -134,7 +124,7 @@ IngestAndPublishGranule:
         - ErrorEquals:
           - States.ALL
           ResultPath: '$.exception'
-          Next: StopStatus
+          Next: WorkflowSucceeded
       Retry:
         - ErrorEquals:
             - States.ALL
@@ -153,7 +143,7 @@ IngestAndPublishGranule:
         - ErrorEquals:
           - States.ALL
           ResultPath: '$.exception'
-          Next: StopStatus
+          Next: WorkflowSucceeded
       Next: MoveGranuleStep
     MoveGranuleStep:
       CumulusConfig:
@@ -170,7 +160,7 @@ IngestAndPublishGranule:
         - ErrorEquals:
           - States.ALL
           ResultPath: '$.exception'
-          Next: StopStatus
+          Next: WorkflowSucceeded
       Next: CmrStep
     CmrStep:
       CumulusConfig:
@@ -186,29 +176,10 @@ IngestAndPublishGranule:
         - ErrorEquals:
           - States.ALL
           ResultPath: '$.exception'
-          Next: StopStatus
-      Next: StopStatus
-    StopStatus:
-      Type: Task
-      Resource: ${SfSnsReportLambdaFunction.Arn}
-      CumulusConfig:
-        sfnEnd: true
-        stack: '{$.meta.stack}'
-        bucket: '{$.meta.buckets.internal.name}'
-        stateMachine: '{$.cumulus_meta.state_machine}'
-        executionName: '{$.cumulus_meta.execution_name}'
-        cumulus_message:
-          input: '{$}'
-      Retry:
-        - <<: *LambdaServiceExceptionRetry
-      Catch:
-        - ErrorEquals:
-          - States.ALL
-          Next: WorkflowFailed
-      End: true
-    WorkflowFailed:
-      Type: Fail
-      Cause: 'Workflow failed'
+          Next: WorkflowSucceeded
+      Next: WorkflowSucceeded
+    WorkflowSucceeded:
+      Type: Succeed
 
 IngestGranule:
   Comment: 'Ingest Granule'

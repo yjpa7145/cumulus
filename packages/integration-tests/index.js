@@ -407,7 +407,7 @@ const getProviderHost = ({ host }) => process.env.PROVIDER_HOST || host;
  * Otherwise set it to the environment variable, if set.
  *
  * @param {Object} provider - provider object
- * @returns provider port
+ * @returns {string} provider port
  */
 function getProviderPort({ protocol, port }) {
   if (protocol === 'ftp') {
@@ -773,7 +773,8 @@ async function waitForTestExecutionStart({
   bucket,
   findExecutionFn,
   findExecutionFnParams,
-  maxWaitSeconds
+  maxWaitSeconds,
+  initialStepName = 'SfSnsReport'
 }) {
   let timeWaitedSecs = 0;
   /* eslint-disable no-await-in-loop */
@@ -784,7 +785,7 @@ async function waitForTestExecutionStart({
 
     for (let executionCtr = 0; executionCtr < executions.length; executionCtr += 1) {
       const execution = executions[executionCtr];
-      const taskInput = await lambdaStep.getStepInput(execution.executionArn, 'SfSnsReport');
+      const taskInput = await lambdaStep.getStepInput(execution.executionArn, initialStepName);
       if (taskInput && findExecutionFn(taskInput, findExecutionFnParams)) {
         return execution;
       }

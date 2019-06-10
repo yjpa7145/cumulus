@@ -110,8 +110,6 @@ describe('The S3 Ingest Granules workflow', () => {
 
   let workflowExecution = null;
   let failingWorkflowExecution;
-  let failedExecutionArn;
-  let failedExecutionName;
   let inputPayload;
   let expectedSyncGranulePayload;
   let expectedPayload;
@@ -128,7 +126,6 @@ describe('The S3 Ingest Granules workflow', () => {
   const collectionModel = new Collection();
   process.env.ProvidersTable = `${config.stackName}-ProvidersTable`;
   const providerModel = new Provider();
-  let executionName;
 
   beforeAll(async () => {
     const collectionJson = JSON.parse(fs.readFileSync(`${collectionsDir}/s3_MOD09GQ_006.json`, 'utf8'));
@@ -189,8 +186,6 @@ describe('The S3 Ingest Granules workflow', () => {
       provider,
       {}
     );
-    failedExecutionArn = failingWorkflowExecution.executionArn.split(':');
-    failedExecutionName = failedExecutionArn.pop();
   });
 
   afterAll(async () => {
@@ -440,25 +435,7 @@ describe('The S3 Ingest Granules workflow', () => {
     });
   });
 
-  describe('an SNS message', () => {
-    let existCheck = [];
-
-    beforeAll(async () => {
-      executionName = postToCmrOutput.cumulus_meta.execution_name;
-      existCheck = await Promise.all([
-        s3ObjectExists({ Bucket: config.bucket, Key: `${config.stackName}/test-output/${executionName}.output` }),
-        s3ObjectExists({ Bucket: config.bucket, Key: `${config.stackName}/test-output/${failedExecutionName}.output` })
-      ]);
-    });
-
-    it('is published on a successful workflow completion', () => {
-      expect(existCheck[0]).toEqual(true);
-    });
-
-    it('is published on workflow failure', () => {
-      expect(existCheck[1]).toEqual(true);
-    });
-
+  describe('workflow completion', () => {
     it('triggers the granule record being added to DynamoDB', async () => {
       const record = await granuleModel.get({ granuleId: inputPayload.granules[0].granuleId });
       expect(record.execution).toEqual(getExecutionUrl(workflowExecution.executionArn));
@@ -529,7 +506,8 @@ describe('The S3 Ingest Granules workflow', () => {
             stackName: config.stackName,
             bucket: config.bucket,
             findExecutionFn: isReingestExecutionForGranuleId,
-            findExecutionFnParams: { granuleId: inputPayload.granules[0].granuleId }
+            findExecutionFnParams: { granuleId: inputPayload.granules[0].granuleId },
+            initialStepName: 'SyncGranule'
           });
 
           console.log(`Wait for completed execution ${reingestGranuleExecution.executionArn}`);

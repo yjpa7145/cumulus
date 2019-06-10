@@ -98,6 +98,7 @@ function generateWorkflowTemplate(name, workflow, config, outputs) {
   const bucket = get(config, 'system_bucket');
 
   // add the sns topic arn used for monitoring workflows
+  // TODO I think this can be removed
   const topicArn = findOutputValue(outputs, 'sftrackerSnsArn');
 
   // add the current workflows' state machine arn

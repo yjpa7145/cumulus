@@ -1,8 +1,8 @@
 'use strict';
 
-const get = require('lodash.get');
-const log = require('@cumulus/common/log');
+const isObject = require('lodash.isobject');
 const pMap = require('p-map');
+const { getJSONObjectFromS3 } = require('@cumulus/common/aws');
 const { Granule, Pdr, Execution } = require('../models');
 
 /**
@@ -27,22 +27,36 @@ function pdr(payload) {
   return p.createPdrFromSns(payload);
 }
 
+const fetchRemoteCumulusMessage = async (cumulusMessage) => {
+  if (!cumulusMessage.replace) return cumulusMessage;
+
+  return getJSONObjectFromS3(
+    cumulusMessage.replace.Bucket,
+    cumulusMessage.replace.Key
+  );
+};
+
 /**
  * processes the incoming cumulus message and pass it through a number
  * of indexers
  *
  * @param  {Object} event - incoming cumulus message
- * @returns {Promise} object with response from the three indexer
+ * @returns {Promise<undefined>} object with response from the three indexer
  */
 async function handlePayload(event) {
-  let payload;
-  const source = get(event, 'EventSource');
+  if (event.source !== 'aws.states') return;
 
-  if (source === 'aws:sns') {
-    payload = get(event, 'Sns.Message');
-    payload = JSON.parse(payload);
+  let payload;
+
+  if (event.detail.status === 'RUNNING') {
+    payload = await fetchRemoteCumulusMessage(JSON.parse(event.detail.input));
+    payload.meta.status = 'running';
   } else {
-    payload = event;
+    payload = await fetchRemoteCumulusMessage(JSON.parse(event.detail.output));
+    if (isObject(payload.exception) && Object.keys(payload.exception).length > 0) payload.meta.status = 'failed';
+    else if (payload.Error) payload.meta.status = 'failed';
+    else if (payload.error) payload.meta.status = 'failed';
+    else payload.meta.status = 'completed';
   }
 
   let executionPromise;
@@ -53,11 +67,11 @@ async function handlePayload(event) {
     executionPromise = e.createExecutionFromSns(payload);
   }
 
-  return {
-    sf: await executionPromise,
-    pdr: await pdr(payload),
-    granule: await granule(payload)
-  };
+  await Promise.all([
+    executionPromise,
+    pdr(payload),
+    granule(payload)
+  ]);
 }
 
 /**

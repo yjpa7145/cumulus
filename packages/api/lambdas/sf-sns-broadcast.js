@@ -1,5 +1,7 @@
 'use strict';
 
+// TODO I think this can be deprecated & removed
+
 const AWS = require('aws-sdk');
 const get = require('lodash.get');
 const isObject = require('lodash.isobject');

@@ -361,6 +361,17 @@ exports.getS3Object = improveStackTrace(
   (Bucket, Key) => exports.s3().getObject({ Bucket, Key }).promise()
 );
 
+/**
+ * Get a JSON object from S3
+ *
+ * @param {string} bucket - name of bucket
+ * @param {string} key - key for object
+ * @returns {Promise<Object>} a Javascript Object fetched from S3
+ */
+exports.getJSONObjectFromS3 = (bucket, key) =>
+  exports.getS3Object(bucket, key)
+    .then(({ Body }) => JSON.parse(Body.toString()));
+
 exports.getS3ObjectReadStream = (bucket, key) => exports.s3().getObject(
   { Bucket: bucket, Key: key }
 ).createReadStream();
@@ -931,6 +942,7 @@ exports.getStateMachineArn = (executionArn) => {
 * @param {string} stack - the deployment stackname
 * @returns {string} - s3 path
 **/
+// TODO I think this can be deprecated & removed
 exports.getGranuleS3Params = (granuleId, stack) => `${stack}/granules_ingested/${granuleId}`;
 
 /**
@@ -945,6 +957,7 @@ exports.getGranuleS3Params = (granuleId, stack) => `${stack}/granules_ingested/$
 * @param {string} status - granule status
 * @returns {Promise} returns the response from `S3.put` as a promise
 **/
+// TODO I think this can be deprecated & removed
 exports.setGranuleStatus = async (
   granuleId,
   stack,
