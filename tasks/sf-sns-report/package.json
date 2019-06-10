@@ -3,9 +3,6 @@
   "version": "1.13.0",
   "description": "Broadcasts an incoming Cumulus message to SNS",
   "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
   "homepage": "https://github.com/nasa/cumulus/tree/master/tasks/sf-sns-report",
   "repository": {
     "type": "git",
@@ -18,34 +15,8 @@
     "node": ">=8.10.0"
   },
   "scripts": {
-    "test": "ava",
-    "test-coverage": "nyc ava",
-    "build": "rm -rf dist && mkdir dist && cp -R schemas dist/ && webpack",
-    "watch": "rm -rf dist && mkdir dist && cp -R schemas dist/ && webpack --progress -w",
-    "prepare": "npm run build"
-  },
-  "ava": {
-    "files": "tests"
-  },
-  "nyc": {
-    "exclude": [
-      "tests"
-    ]
+    "build": "mkdir -p dist && cp index.js dist/index.js"
   },
   "author": "Cumulus Authors",
-  "license": "Apache-2.0",
-  "dependencies": {
-    "@cumulus/common": "1.13.0",
-    "@cumulus/cumulus-message-adapter-js": "^1.0.7",
-    "@cumulus/ingest": "1.13.0",
-    "lodash.get": "^4.4.2",
-    "lodash.isobject": "^3.0.2"
-  },
-  "devDependencies": {
-    "ava": "^0.25.0",
-    "lodash.clonedeep": "^4.5.0",
-    "nyc": "^14.0.0",
-    "webpack": "~4.5.0",
-    "webpack-cli": "~2.0.14"
-  }
+  "license": "Apache-2.0"
 }
