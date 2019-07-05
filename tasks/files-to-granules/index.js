@@ -74,8 +74,8 @@ function mergeInputFilesWithInputGranules(inputFiles, inputGranules, regex) {
  *
  * @returns {Object} Granules object
  */
-function filesToGranules(event) {
-  const granuleIdExtractionRegex = get(event.config, 'granuleIdExtraction', '(.*)');
+async function filesToGranules(event) {
+  const granuleIdExtractionRegex = get(event, 'granuleIdExtraction', '(.*)');
   // const inputGranules = event.config.inputGranules;
   const inputGranules = event.granules;
   const inputFileList = event.files;

@@ -51,7 +51,7 @@ async function fakeProcessing(event) {
     collection.name = collection.name.substring(0, idx);
   }
 
-  let outputGranules;
+  let outputGranules = granules;
   if (event.generateFakeBrowse) {
     outputGranules = await uploadFakeBrowse(granules);
   }
