@@ -269,7 +269,7 @@ IngestGranule:
     ChooseProcess:
       Type: Choice
       Choices:
-        - Variable: $.cumulus_meta.process
+        - Variable: $.payload.process
           StringEquals: modis
           Next: ProcessingStep
       Default: StopStatus
