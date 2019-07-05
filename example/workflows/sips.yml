@@ -220,6 +220,9 @@ IngestGranule:
       # CumulusConfig:
       #   cumulus_message:
       #     input: '{$}'
+      Parameters: {
+        "input.$": "$"
+      }
       ResultPath: "$.payload"
       Retry:
         - <<: *LambdaServiceExceptionRetry
