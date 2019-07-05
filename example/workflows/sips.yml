@@ -246,10 +246,13 @@ IngestGranule:
         "provider.$": "$.meta.provider",
         "collection.$": "$.meta.collection",
         "stack.$": "$.meta.stack",
-        "downloadBucket": "$.cumulus_meta.system_bucket",
-        "duplicateHandling": "$.meta.collection.duplicateHandling",
-        "pdr": "$.meta.pdr"
+        "downloadBucket.$": "$.cumulus_meta.system_bucket",
+        "duplicateHandling.$": "$.meta.collection.duplicateHandling",
+        "granules.$": "$.payload.granules"
+        # $.meta.pdr does not always exist, which throws an error
+        # "pdr.$": "$.meta.pdr"
       }
+      ResultPath: "$.payload"
       Type: Task
       Resource: ${SyncGranuleLambdaFunction.Arn}
       Retry:
@@ -262,67 +265,87 @@ IngestGranule:
           - States.ALL
           ResultPath: '$.exception'
           Next: StopStatus
-      # Next: ChooseProcess
-      Next: StopStatus
-    # ChooseProcess:
-    #   Type: Choice
-    #   Choices:
-    #     - Variable: $.cumulus_meta.process
-    #       StringEquals: modis
-    #       Next: ProcessingStep
-    #   Default: StopStatus
-    # ProcessingStep:
-    #   CumulusConfig:
-    #     bucket: '{$.meta.buckets.internal.name}'
-    #     collection: '{$.meta.collection}'
-    #     cumulus_message:
-    #       outputs:
-    #         - source: '{$.files}'
-    #           destination: '{$.payload}'
-    #   Type: Task
-    #   Resource: ${FakeProcessingLambdaFunction.Arn}
-    #   Catch:
-    #     - ErrorEquals:
-    #       - States.ALL
-    #       ResultPath: '$.exception'
-    #       Next: StopStatus
-    #   Retry:
-    #     - ErrorEquals:
-    #         - States.ALL
-    #       IntervalSeconds: 2
-    #       MaxAttempts: 3
-    #   Next: FilesToGranulesStep
-    # FilesToGranulesStep:
-    #   CumulusConfig:
-    #     inputGranules: '{$.meta.input_granules}'
-    #     granuleIdExtraction: '{$.meta.collection.granuleIdExtraction}'
-    #   Type: Task
-    #   Resource: ${FilesToGranulesLambdaFunction.Arn}
-    #   Retry:
-    #     - <<: *LambdaServiceExceptionRetry
-    #   Catch:
-    #     - ErrorEquals:
-    #       - States.ALL
-    #       ResultPath: '$.exception'
-    #       Next: StopStatus
-    #   Next: MoveGranuleStep
-    # MoveGranuleStep:
+      Next: ChooseProcess
+    ChooseProcess:
+      Type: Choice
+      Choices:
+        - Variable: $.cumulus_meta.process
+          StringEquals: modis
+          Next: ProcessingStep
+      Default: StopStatus
+    ProcessingStep:
+      # CumulusConfig:
+      #   bucket: '{$.meta.buckets.internal.name}'
+      #   collection: '{$.meta.collection}'
+      #   cumulus_message:
+      #     outputs:
+      #       - source: '{$.files}'
+      #         destination: '{$.payload}'
+      Type: Task
+      Parameters: {
+        "granules.$": "$.payload.granules",
+        "bucket.$": "$.meta.buckets.internal.name",
+        "collection.$": "$.meta.collection"
+      }
+      ResultPath: "$.payload"
+      Resource: ${FakeProcessingLambdaFunction.Arn}
+      Catch:
+        - ErrorEquals:
+          - States.ALL
+          ResultPath: '$.exception'
+          Next: StopStatus
+      Retry:
+        - ErrorEquals:
+            - States.ALL
+          IntervalSeconds: 2
+          MaxAttempts: 3
+      Next: FilesToGranulesStep
+    FilesToGranulesStep:
+      # CumulusConfig:
+      #   inputGranules: '{$.meta.input_granules}'
+      #   granuleIdExtraction: '{$.meta.collection.granuleIdExtraction}'
+      Type: Task
+      Parameters: {
+        "files.$": "$.payload.files",
+        "granules.$": "$.payload.granules",
+        "granuleIdExtraction.$": "$.meta.collection.granuleIdExtraction"
+      }
+      ResultPath: "$.payload"
+      Resource: ${FilesToGranulesLambdaFunction.Arn}
+      Retry:
+        - <<: *LambdaServiceExceptionRetry
+      Catch:
+        - ErrorEquals:
+          - States.ALL
+          ResultPath: '$.exception'
+          Next: StopStatus
+      Next: MoveGranuleStep
+    MoveGranuleStep:
       # CumulusConfig:
       #   bucket: '{$.meta.buckets.internal.name}'
       #   buckets: '{$.meta.buckets}'
       #   distribution_endpoint: '{$.meta.distribution_endpoint}'
       #   collection: '{$.meta.collection}'
       #   duplicateHandling: '{$.meta.collection.duplicateHandling}'
-      # Type: Task
-      # Resource: ${MoveGranulesLambdaFunction.Arn}
-      # Retry:
-      #   - <<: *LambdaServiceExceptionRetry
-      # Catch:
-      #   - ErrorEquals:
-      #     - States.ALL
-      #     ResultPath: '$.exception'
-      #     Next: StopStatus
-      # Next: StopStatus
+      Type: Task
+      Parameters: {
+        "bucket.$": "$.meta.buckets.internal.name",
+        "buckets.$": "$.meta.buckets",
+        "distribution_endpoint.$": "$.meta.distribution_endpoint",
+        "collection.$": "$.meta.collection",
+        "duplicateHandling.$": "$.meta.collection.duplicateHandling",
+        "granules.$": "$.payload.granules"
+      }
+      ResultPath: "$.payload"
+      Resource: ${MoveGranulesLambdaFunction.Arn}
+      Retry:
+        - <<: *LambdaServiceExceptionRetry
+      Catch:
+        - ErrorEquals:
+          - States.ALL
+          ResultPath: '$.exception'
+          Next: StopStatus
+      Next: StopStatus
     StopStatus:
       Type: Task
       Resource: ${SfSnsReportLambdaFunction.Arn}
@@ -339,9 +362,10 @@ IngestGranule:
         "bucket.$": "$.meta.buckets.internal.name",
         "provider.$": "$.meta.provider",
         "stack.$": "$.meta.stack",
-        "stateMachine.$": "$.cumulus_meta.state_machine}",
-        "executionName.$": "$.cumulus_meta.execution_name}"
+        "stateMachine.$": "$.cumulus_meta.state_machine",
+        "executionName.$": "$.cumulus_meta.execution_name"
       }
+      ResultPath: "$.payload"
       Retry:
         - <<: *LambdaServiceExceptionRetry
       Catch:

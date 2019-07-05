@@ -2,7 +2,7 @@
 
 const path = require('path');
 const pMap = require('p-map');
-const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
+// const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
 const errors = require('@cumulus/common/errors');
 const lock = require('@cumulus/ingest/lock');
 const {
@@ -62,8 +62,10 @@ async function download(ingest, bucket, provider, granules) {
  * @returns {Promise.<Object>} - a description of the ingested granules
  */
 exports.syncGranule = function syncGranule(event) {
+  log.info('event', event);
   // const config = event.config;
-  const input = event.input;
+  // const input = event.input;
+  const inputGranules = event.granules;
   const stack = event.stack;
   const buckets = event.buckets;
   const provider = event.provider;
@@ -95,7 +97,7 @@ exports.syncGranule = function syncGranule(event) {
     duplicateHandling
   );
 
-  return download(ingest, downloadBucket, provider, input.granules)
+  return download(ingest, downloadBucket, provider, inputGranules)
     .then((granules) => {
       if (ingest.end) ingest.end();
       const output = { granules };
@@ -127,11 +129,12 @@ exports.syncGranule = function syncGranule(event) {
  * @param {Function} callback - an AWS Lambda handler
  * @returns {undefined} - does not return a value
  */
-exports.handler = function handler(event, context, callback) {
-  cumulusMessageAdapter.runCumulusTask(
-    exports.syncGranule,
-    event,
-    context,
-    callback
-  );
-};
+// exports.handler = function handler(event, context, callback) {
+//   cumulusMessageAdapter.runCumulusTask(
+//     exports.syncGranule,
+//     event,
+//     context,
+//     callback
+//   );
+// };
+exports.handler = exports.syncGranule;

@@ -1,6 +1,6 @@
 'use strict';
 
-const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
+// const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
 const { generateCmrFilesForGranules } = require('@cumulus/integration-tests');
 const { promiseS3Upload } = require('@cumulus/common/aws');
 const cloneDeep = require('lodash.clonedeep');
@@ -9,9 +9,9 @@ const fs = require('fs');
 const img = require('./data/testBrowse.jpg');
 
 
-async function uploadFakeBrowse(input) {
+async function uploadFakeBrowse(granules) {
   const uploadPromises = [];
-  input.granules.forEach((granule) => {
+  granules.forEach((granule) => {
     granule.files.forEach((file) => {
       if (file.type === 'data') {
         const browseFile = cloneDeep(file);
@@ -30,7 +30,7 @@ async function uploadFakeBrowse(input) {
     });
   });
   await Promise.all(uploadPromises);
-  return input.granules;
+  return granules;
 }
 
 
@@ -42,25 +42,28 @@ async function uploadFakeBrowse(input) {
  */
 
 async function fakeProcessing(event) {
-  const input = event.input;
-  const collection = event.config.collection;
+  // const input = event.input;
+  const collection = event.collection;
+  const granules = event.granules;
+
   if (collection.name.includes('_test')) {
     const idx = collection.name.indexOf('_test');
     collection.name = collection.name.substring(0, idx);
   }
 
+  let outputGranules;
   if (event.config.generateFakeBrowse) {
-    input.granules = await uploadFakeBrowse(input);
+    outputGranules = await uploadFakeBrowse(granules);
   }
 
   const outputFiles = await generateCmrFilesForGranules(
-    input.granules,
+    outputGranules,
     collection,
     event.config.bucket,
     event.config.cmrMetadataFormat,
     event.config.additionalUrls
   );
-  return { files: outputFiles, granules: input.granules };
+  return { files: outputFiles, granules: outputGranules };
 }
 
 /**
@@ -71,8 +74,8 @@ async function fakeProcessing(event) {
  * @param {Function} callback - an AWS Lambda handler
  * @returns {undefined} - does not return a value
  */
-function handler(event, context, callback) {
-  cumulusMessageAdapter.runCumulusTask(fakeProcessing, event, context, callback);
-}
+// function handler(event, context, callback) {
+//   cumulusMessageAdapter.runCumulusTask(fakeProcessing, event, context, callback);
+// }
 
-exports.handler = handler;
+exports.handler = fakeProcessing;

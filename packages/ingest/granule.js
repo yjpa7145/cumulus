@@ -940,10 +940,10 @@ function unversionFilename(filename) {
  * @returns {string} - duplicate handling directive.
  */
 function duplicateHandlingType(event) {
-  const config = get(event, 'config');
-  const collection = get(config, 'collection');
+  // const config = get(event, 'config');
+  const collection = get(event, 'collection');
 
-  let duplicateHandling = get(config, 'duplicateHandling', get(collection, 'duplicateHandling', 'error'));
+  let duplicateHandling = get(event, 'duplicateHandling', get(collection, 'duplicateHandling', 'error'));
 
   const forceDuplicateOverwrite = get(event, 'cumulus_config.cumulus_context.forceDuplicateOverwrite', false);
 

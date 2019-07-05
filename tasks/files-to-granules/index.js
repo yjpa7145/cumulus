@@ -5,7 +5,7 @@ const get = require('lodash.get');
 const keyBy = require('lodash.keyby');
 const path = require('path');
 
-const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
+// const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
 
 const { getGranuleId, parseS3Uri } = require('./utils');
 
@@ -76,8 +76,9 @@ function mergeInputFilesWithInputGranules(inputFiles, inputGranules, regex) {
  */
 function filesToGranules(event) {
   const granuleIdExtractionRegex = get(event.config, 'granuleIdExtraction', '(.*)');
-  const inputGranules = event.config.inputGranules;
-  const inputFileList = event.input;
+  // const inputGranules = event.config.inputGranules;
+  const inputGranules = event.granules;
+  const inputFileList = event.files;
 
   return mergeInputFilesWithInputGranules(
     inputFileList, inputGranules, granuleIdExtractionRegex
@@ -85,10 +86,10 @@ function filesToGranules(event) {
 }
 exports.filesToGranules = filesToGranules;
 
-function handler(event, context, callback) {
-  cumulusMessageAdapter.runCumulusTask(
-    filesToGranules, event, context, callback
-  );
-}
+// function handler(event, context, callback) {
+//   cumulusMessageAdapter.runCumulusTask(
+//     filesToGranules, event, context, callback
+//   );
+// }
 
-exports.handler = handler;
+exports.handler = filesToGranules;

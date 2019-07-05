@@ -1,6 +1,6 @@
 'use strict';
 
-const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
+// const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
 const { InvalidArgument } = require('@cumulus/common/errors');
 const get = require('lodash.get');
 const clonedeep = require('lodash.clonedeep');
@@ -265,13 +265,13 @@ async function updateEachCmrFileAccessURLs(
 async function moveGranules(event) {
   // we have to post the meta-xml file of all output granules
   // first we check if there is an output file
-  const config = event.config;
-  const bucketsConfig = new BucketsConfig(config.buckets);
-  const moveStagedFiles = get(config, 'moveStagedFiles', true);
+  // const config = event.config;
+  const bucketsConfig = new BucketsConfig(event.buckets);
+  const moveStagedFiles = get(event, 'moveStagedFiles', true);
 
   const duplicateHandling = duplicateHandlingType(event);
 
-  const granulesInput = event.input.granules;
+  const granulesInput = event.granules;
   const cmrFiles = granulesToCmrFileObjects(granulesInput);
   const granulesByGranuleId = keyBy(granulesInput, 'granuleId');
 
@@ -280,18 +280,18 @@ async function moveGranules(event) {
   if (moveStagedFiles) {
     // update allGranules with aspirational metadata (where the file should end up after moving.)
     const granulesToMove = await updateGranuleMetadata(
-      granulesByGranuleId, config.collection, cmrFiles, bucketsConfig
+      granulesByGranuleId, event.collection, cmrFiles, bucketsConfig
     );
 
     // move files from staging location to final location
     movedGranules = await moveFilesForAllGranules(
-      granulesToMove, config.bucket, duplicateHandling, bucketsConfig
+      granulesToMove, event.bucket, duplicateHandling, bucketsConfig
     );
     // update cmr metadata files with correct online access urls
     await updateEachCmrFileAccessURLs(
       cmrFiles,
       movedGranules,
-      config.distribution_endpoint,
+      event.distribution_endpoint,
       bucketsConfig
     );
   } else {
@@ -312,8 +312,8 @@ exports.moveGranules = moveGranules;
  * @param {Function} callback - an AWS Lambda handler
  * @returns {undefined} - does not return a value
  */
-function handler(event, context, callback) {
-  cumulusMessageAdapter.runCumulusTask(moveGranules, event, context, callback);
-}
+// function handler(event, context, callback) {
+//   cumulusMessageAdapter.runCumulusTask(moveGranules, event, context, callback);
+// }
 
-exports.handler = handler;
+exports.handler = moveGranules;

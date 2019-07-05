@@ -35,12 +35,12 @@ DiscoverPdrs:
 FakeProcessing:
   handler: index.handler
   source: node_modules/@cumulus/test-processing/dist/
-  useMessageAdapter: true
+  # useMessageAdapter: true
   launchInVpc: true
 FilesToGranules:
   handler: index.handler
   source: node_modules/@cumulus/files-to-granules/dist/
-  useMessageAdapter: true
+  # useMessageAdapter: true
   launchInVpc: true
 HelloWorld:
   handler: index.handler
@@ -62,7 +62,7 @@ MoveGranules:
   handler: index.handler
   timeout: 300
   source: node_modules/@cumulus/move-granules/dist/
-  useMessageAdapter: true
+  # useMessageAdapter: true
   launchInVpc: true
 QueuePdrs:
   handler: index.handler

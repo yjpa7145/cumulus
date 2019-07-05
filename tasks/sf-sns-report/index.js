@@ -124,7 +124,7 @@ exports.publishSnsMessage = publishSnsMessage;
  * @param {Function} callback - an AWS Lambda call back
  * @returns {undefined} - does not return a value
  */
-function handler(event, context, callback) {
-  cumulusMessageAdapter.runCumulusTask(publishSnsMessage, event, context, callback);
-}
-exports.handler = handler;
+// function handler(event, context, callback) {
+//   cumulusMessageAdapter.runCumulusTask(publishSnsMessage, event, context, callback);
+// }
+exports.handler = publishSnsMessage;
