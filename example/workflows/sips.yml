@@ -363,7 +363,8 @@ IngestGranule:
         "provider.$": "$.meta.provider",
         "stack.$": "$.meta.stack",
         "stateMachine.$": "$.cumulus_meta.state_machine",
-        "executionName.$": "$.cumulus_meta.execution_name"
+        "executionName.$": "$.cumulus_meta.execution_name",
+        "input.$": "$"
       }
       ResultPath: "$.payload"
       Retry:

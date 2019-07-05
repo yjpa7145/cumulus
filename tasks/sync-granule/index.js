@@ -62,7 +62,6 @@ async function download(ingest, bucket, provider, granules) {
  * @returns {Promise.<Object>} - a description of the ingested granules
  */
 exports.syncGranule = function syncGranule(event) {
-  log.info('event', event);
   // const config = event.config;
   // const input = event.input;
   const inputGranules = event.granules;

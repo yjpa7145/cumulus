@@ -4,7 +4,7 @@ const get = require('lodash.get');
 const isObject = require('lodash.isobject');
 const { setGranuleStatus, sns } = require('@cumulus/common/aws');
 const errors = require('@cumulus/common/errors');
-const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
+// const cumulusMessageAdapter = require('@cumulus/cumulus-message-adapter-js');
 
 /**
  * Determines if there was a valid exception in the input message
@@ -75,18 +75,17 @@ function makeLambdaFunctionFail(event) {
  *  failure.
  */
 async function publishSnsMessage(event) {
-  // const config = get(event, 'config');
-  // const message = get(event, 'input');
-
+  const message = get(event, 'input');
   const finished = get(event, 'sfnEnd', false);
-  const topicArn = get(event, 'meta.topic_arn', null);
-  const failed = eventFailed(event);
+
+  const topicArn = get(message, 'meta.topic_arn', null);
+  const failed = eventFailed(message);
 
   if (topicArn) {
     // if this is the sns call at the end of the execution
     if (finished) {
-      event.meta.status = failed ? 'failed' : 'completed';
-      const granuleId = get(event, 'meta.granuleId', null);
+      message.meta.status = failed ? 'failed' : 'completed';
+      const granuleId = get(message, 'meta.granuleId', null);
       if (granuleId) {
         await setGranuleStatus(
           granuleId,
@@ -94,24 +93,24 @@ async function publishSnsMessage(event) {
           event.bucket,
           event.stateMachine,
           event.executionName,
-          event.meta.status
+          message.meta.status
         );
       }
     } else {
-      event.meta.status = 'running';
+      message.meta.status = 'running';
     }
 
     await sns().publish({
       TopicArn: topicArn,
-      Message: JSON.stringify(event)
+      Message: JSON.stringify(message)
     }).promise();
   }
 
   if (failed) {
-    makeLambdaFunctionFail(event);
+    makeLambdaFunctionFail(message);
   }
 
-  return get(event, 'payload', {});
+  return get(message, 'payload', {});
 }
 
 exports.publishSnsMessage = publishSnsMessage;
