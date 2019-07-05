@@ -50,6 +50,23 @@ HelloWorldWorkflow:
       Type: Fail
       Cause: 'Workflow failed'
 
+TestWorkflow:
+  StartAt: Test1
+  States:
+    Test1:
+      Type: Pass
+      Result: { "Value1": "foo", "Value2": "bar" }
+      ResultPath: "$.payload"
+      Next: Test2
+    Test2:
+      Type: Pass
+      Parameters: {
+        "value1": "$.payload.Value1"
+      }
+      Result: { "Value2": true }
+      ResultPath: "$.payload"
+      End: true
+
 EcsHelloWorldWorkflow:
   Comment: 'Returns Hello World'
   StartAt: StartStatus

@@ -104,14 +104,14 @@ SfSnsReport:
   handler: index.handler
   timeout: 300
   source: node_modules/@cumulus/sf-sns-report/dist
-  useMessageAdapter: true
+  # useMessageAdapter: true
   launchInVpc: true
 SyncGranule:
   handler: index.handler
   timeout: 300
   logToElasticSearch: true
   source: node_modules/@cumulus/sync-granule/dist/
-  useMessageAdapter: true
+  # useMessageAdapter: true
   launchInVpc: true
   envs:
     system_bucket: '{{system_bucket}}'

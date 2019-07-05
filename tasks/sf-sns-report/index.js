@@ -75,43 +75,43 @@ function makeLambdaFunctionFail(event) {
  *  failure.
  */
 async function publishSnsMessage(event) {
-  const config = get(event, 'config');
-  const message = get(event, 'input');
+  // const config = get(event, 'config');
+  // const message = get(event, 'input');
 
-  const finished = get(config, 'sfnEnd', false);
-  const topicArn = get(message, 'meta.topic_arn', null);
-  const failed = eventFailed(message);
+  const finished = get(event, 'sfnEnd', false);
+  const topicArn = get(event, 'meta.topic_arn', null);
+  const failed = eventFailed(event);
 
   if (topicArn) {
     // if this is the sns call at the end of the execution
     if (finished) {
-      message.meta.status = failed ? 'failed' : 'completed';
-      const granuleId = get(message, 'meta.granuleId', null);
+      event.meta.status = failed ? 'failed' : 'completed';
+      const granuleId = get(event, 'meta.granuleId', null);
       if (granuleId) {
         await setGranuleStatus(
           granuleId,
-          config.stack,
-          config.bucket,
-          config.stateMachine,
-          config.executionName,
-          message.meta.status
+          event.stack,
+          event.bucket,
+          event.stateMachine,
+          event.executionName,
+          event.meta.status
         );
       }
     } else {
-      message.meta.status = 'running';
+      event.meta.status = 'running';
     }
 
     await sns().publish({
       TopicArn: topicArn,
-      Message: JSON.stringify(message)
+      Message: JSON.stringify(event)
     }).promise();
   }
 
   if (failed) {
-    makeLambdaFunctionFail(message);
+    makeLambdaFunctionFail(event);
   }
 
-  return get(message, 'payload', {});
+  return get(event, 'payload', {});
 }
 
 exports.publishSnsMessage = publishSnsMessage;

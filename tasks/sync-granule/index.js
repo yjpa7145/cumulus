@@ -62,20 +62,20 @@ async function download(ingest, bucket, provider, granules) {
  * @returns {Promise.<Object>} - a description of the ingested granules
  */
 exports.syncGranule = function syncGranule(event) {
-  const config = event.config;
+  // const config = event.config;
   const input = event.input;
-  const stack = config.stack;
-  const buckets = config.buckets;
-  const provider = config.provider;
-  const collection = config.collection;
-  const forceDownload = config.forceDownload || false;
-  const downloadBucket = config.downloadBucket;
+  const stack = event.stack;
+  const buckets = event.buckets;
+  const provider = event.provider;
+  const collection = event.collection;
+  const forceDownload = event.forceDownload || false;
+  const downloadBucket = event.downloadBucket;
 
   const duplicateHandling = duplicateHandlingType(event);
 
   // use stack and collection names to suffix fileStagingDir
   const fileStagingDir = path.join(
-    (config.fileStagingDir || 'file-staging'),
+    (event.fileStagingDir || 'file-staging'),
     stack
   );
 
@@ -100,7 +100,7 @@ exports.syncGranule = function syncGranule(event) {
       if (ingest.end) ingest.end();
       const output = { granules };
       if (collection && collection.process) output.process = collection.process;
-      if (config.pdr) output.pdr = config.pdr;
+      if (event.pdr) output.pdr = event.pdr;
       log.debug(`SyncGranule Complete. Returning output: ${JSON.stringify(output)}`);
       return output;
     }).catch((e) => {
